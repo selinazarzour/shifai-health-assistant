@@ -10,6 +10,8 @@ HealthAssist is a multilingual healthcare triage application that helps patients
 - **Framework**: React 18 with TypeScript
 - **Routing**: Wouter for client-side routing
 - **State Management**: TanStack Query (React Query) for server state management
+- **Authentication**: Firebase Authentication with Google Sign-In
+- **Database**: Firebase Firestore for patient profiles and symptom history
 - **UI Components**: Shadcn/ui component library built on Radix UI primitives
 - **Styling**: Tailwind CSS with custom CSS variables for theming
 - **Form Handling**: React Hook Form with Zod validation
@@ -18,15 +20,14 @@ HealthAssist is a multilingual healthcare triage application that helps patients
 ### Backend Architecture
 - **Runtime**: Node.js with Express.js server
 - **Language**: TypeScript with ES modules
-- **Database**: PostgreSQL with Drizzle ORM
-- **Database Provider**: Neon Database (@neondatabase/serverless)
-- **Session Management**: Connect-pg-simple for PostgreSQL session storage
+- **Doctor Dashboard**: In-memory storage for demonstration purposes
+- **Session Management**: Simple password-based authentication for doctors
 - **Development**: TSX for TypeScript execution in development
 
 ### Database Schema
-The application uses PostgreSQL with the following main tables:
-- **users**: User authentication and management
-- **symptom_entries**: Patient symptom submissions with triage results
+The application uses Firebase Firestore with the following collections:
+- **patients**: Patient profiles with authentication and medical information
+- **symptomEntries**: Patient symptom submissions with triage results and analysis
 
 ## Key Components
 
