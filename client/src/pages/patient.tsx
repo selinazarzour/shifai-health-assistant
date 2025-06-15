@@ -1,31 +1,57 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { UserRound, Heart, Settings, LogOut } from "lucide-react";
-import { SymptomForm } from "@/components/symptom-form";
+import { FirebaseSymptomForm } from "@/components/firebase-symptom-form";
 import { TriageResultDisplay } from "@/components/triage-result";
-import { UserHistory } from "@/components/user-history";
+import { FirebasePatientHistory } from "@/components/firebase-patient-history";
 import { LanguageToggle } from "@/components/language-toggle";
 import { DoctorLoginModal } from "@/components/doctor-login-modal";
+import { PatientProfile } from "@/components/patient-profile";
 import { useLanguage } from "@/hooks/use-language";
+import { useAuth } from "@/hooks/use-auth";
 import type { TriageResult } from "@shared/schema";
 
 export default function PatientPage() {
   const { t } = useLanguage();
-  const [currentUser] = useState(() => 
-    'USER-' + Math.random().toString(36).substr(2, 9)
-  );
+  const { user, profile, loading, signIn, signOut } = useAuth();
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
   const [symptoms, setSymptoms] = useState<string>("");
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const handleTriageResult = (result: TriageResult, symptomsText: string) => {
     setTriageResult(result);
     setSymptoms(symptomsText);
   };
 
+  const handleHistoryUpdate = () => {
+    setHistoryKey(prev => prev + 1);
+  };
+
   const handleDoctorLoginSuccess = () => {
     window.location.href = '/doctor';
   };
+
+  // Show profile modal for first-time users
+  useEffect(() => {
+    if (user && profile && !profile.age && !profile.gender) {
+      setShowProfileModal(true);
+    }
+  }, [user, profile]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
+            <Heart className="w-6 h-6 text-white animate-pulse" />
+          </div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -45,6 +71,40 @@ export default function PatientPage() {
             
             <div className="flex items-center space-x-4">
               <LanguageToggle />
+              
+              {user ? (
+                <div className="flex items-center space-x-2">
+                  <img 
+                    src={profile?.photoURL || user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.displayName || user.displayName || user.email || '')}&background=3b82f6&color=fff`}
+                    alt="Profile"
+                    className="w-8 h-8 rounded-full"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    {profile?.displayName || user.displayName || 'Patient'}
+                  </span>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowProfileModal(true)}
+                  >
+                    <Settings className="w-4 h-4 mr-2" />
+                    Profile
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={signOut}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <Button onClick={signIn}>
+                  Sign In with Google
+                </Button>
+              )}
+              
               <Button onClick={() => setShowLoginModal(true)}>
                 <UserRound className="w-4 h-4 mr-2" />
                 {t('doctor_dashboard')}
@@ -56,19 +116,27 @@ export default function PatientPage() {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <SymptomForm userId={currentUser} onResult={handleTriageResult} />
+        <FirebaseSymptomForm 
+          onResult={handleTriageResult}
+          onHistoryUpdate={handleHistoryUpdate}
+        />
         
         {triageResult && (
           <TriageResultDisplay result={triageResult} symptoms={symptoms} />
         )}
         
-        <UserHistory userId={currentUser} />
+        <FirebasePatientHistory key={historyKey} />
       </main>
 
       <DoctorLoginModal
         open={showLoginModal}
         onOpenChange={setShowLoginModal}
         onSuccess={handleDoctorLoginSuccess}
+      />
+
+      <PatientProfile
+        open={showProfileModal}
+        onOpenChange={setShowProfileModal}
       />
     </div>
   );

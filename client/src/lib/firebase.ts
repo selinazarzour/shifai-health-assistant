@@ -104,9 +104,14 @@ export const saveSymptomEntry = async (uid: string, entry: {
   const entriesRef = collection(db, 'symptomEntries');
   const docRef = doc(entriesRef);
   
+  // Get patient profile for patient name
+  const patientProfile = await getPatientProfile(uid);
+  
   await setDoc(docRef, {
     ...entry,
     uid,
+    patientName: patientProfile?.displayName || 'Unknown Patient',
+    patientEmail: patientProfile?.email || '',
     timestamp: new Date(),
     id: docRef.id,
   });
@@ -128,4 +133,48 @@ export const getPatientSymptomHistory = async (uid: string) => {
     ...doc.data(),
     timestamp: doc.data().timestamp.toDate(),
   }));
+};
+
+// Doctor dashboard functions
+export const getAllSymptomEntries = async () => {
+  const entriesRef = collection(db, 'symptomEntries');
+  const q = query(entriesRef, orderBy('timestamp', 'desc'));
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    timestamp: doc.data().timestamp.toDate(),
+  }));
+};
+
+export const getSymptomEntriesByTriageLevel = async (level: string) => {
+  const entriesRef = collection(db, 'symptomEntries');
+  const q = query(
+    entriesRef,
+    where('triageLevel', '==', level),
+    orderBy('timestamp', 'desc')
+  );
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    timestamp: doc.data().timestamp.toDate(),
+  }));
+};
+
+export const getDashboardStats = async () => {
+  const entriesRef = collection(db, 'symptomEntries');
+  const querySnapshot = await getDocs(entriesRef);
+  
+  const entries = querySnapshot.docs.map(doc => doc.data());
+  const uniquePatients = new Set(entries.map(entry => entry.uid)).size;
+  
+  return {
+    totalPatients: uniquePatients,
+    urgentCases: entries.filter(e => e.triageLevel === 'urgent').length,
+    monitorCases: entries.filter(e => e.triageLevel === 'monitor').length,
+    safeCases: entries.filter(e => e.triageLevel === 'safe').length,
+  };
 };
