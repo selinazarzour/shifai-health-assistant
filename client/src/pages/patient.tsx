@@ -33,9 +33,9 @@ export default function PatientPage() {
     window.location.href = '/doctor';
   };
 
-  // Show profile modal for first-time users
+  // Show profile modal for first-time users who haven't completed their profile
   useEffect(() => {
-    if (user && profile && !profile.age && !profile.gender) {
+    if (user && profile && (!profile.firstName || !profile.lastName)) {
       setShowProfileModal(true);
     }
   }, [user, profile]);

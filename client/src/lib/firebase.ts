@@ -67,23 +67,23 @@ export const createOrUpdateProfile = async (user: User, additionalData: Partial<
   try {
     const userRef = doc(db, 'patients', user.uid);
     const existingUser = await getDoc(userRef);
-    const existingData = existingUser.exists() ? existingUser.data() as PatientProfile : {};
+    const existingData = existingUser.exists() ? existingUser.data() as PatientProfile : {} as Partial<PatientProfile>;
     
     const profileData: PatientProfile = {
       uid: user.uid,
       email: user.email || '',
       displayName: user.displayName || '',
       photoURL: user.photoURL || undefined,
-      firstName: additionalData.firstName || existingData.firstName || '',
-      lastName: additionalData.lastName || existingData.lastName || '',
-      age: additionalData.age !== undefined ? additionalData.age : existingData.age,
-      gender: additionalData.gender || existingData.gender,
-      phoneNumber: additionalData.phoneNumber || existingData.phoneNumber,
-      emergencyContact: additionalData.emergencyContact || existingData.emergencyContact,
-      medicalConditions: additionalData.medicalConditions || existingData.medicalConditions || [],
-      allergies: additionalData.allergies || existingData.allergies || [],
-      medications: additionalData.medications || existingData.medications || [],
-      createdAt: existingData.createdAt || new Date(),
+      firstName: additionalData.firstName || existingData?.firstName || '',
+      lastName: additionalData.lastName || existingData?.lastName || '',
+      age: additionalData.age !== undefined ? additionalData.age : existingData?.age,
+      gender: additionalData.gender || existingData?.gender,
+      phoneNumber: additionalData.phoneNumber || existingData?.phoneNumber,
+      emergencyContact: additionalData.emergencyContact || existingData?.emergencyContact,
+      medicalConditions: additionalData.medicalConditions || existingData?.medicalConditions || [],
+      allergies: additionalData.allergies || existingData?.allergies || [],
+      medications: additionalData.medications || existingData?.medications || [],
+      createdAt: existingData?.createdAt || new Date(),
       updatedAt: new Date(),
     };
 

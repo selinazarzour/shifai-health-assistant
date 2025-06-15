@@ -18,8 +18,6 @@ import type { TriageResult } from "@shared/schema";
 
 const symptomFormSchema = z.object({
   symptoms: z.string().min(10, "Please provide more detailed symptoms"),
-  age: z.number().min(1).max(120).optional(),
-  gender: z.string().optional(),
 });
 
 type SymptomFormData = z.infer<typeof symptomFormSchema>;
@@ -39,8 +37,6 @@ export function FirebaseSymptomForm({ onResult, onHistoryUpdate }: FirebaseSympt
     resolver: zodResolver(symptomFormSchema),
     defaultValues: {
       symptoms: "",
-      age: profile?.age || undefined,
-      gender: profile?.gender || "",
     },
   });
 
@@ -62,8 +58,8 @@ export function FirebaseSymptomForm({ onResult, onHistoryUpdate }: FirebaseSympt
       // Save to Firebase
       await saveSymptomEntry(user.uid, {
         symptoms: data.symptoms,
-        age: data.age,
-        gender: data.gender,
+        age: profile?.age,
+        gender: profile?.gender,
         language,
         triageLevel: triageResult.level,
         triageResult: JSON.stringify(triageResult),
@@ -71,8 +67,6 @@ export function FirebaseSymptomForm({ onResult, onHistoryUpdate }: FirebaseSympt
 
       form.reset({
         symptoms: "",
-        age: profile?.age || undefined,
-        gender: profile?.gender || "",
       });
 
       onHistoryUpdate();
