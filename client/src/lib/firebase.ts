@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection, query, where, orderBy, getDocs, enableNetwork, disableNetwork } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -48,6 +48,8 @@ export interface PatientProfile {
   email: string;
   displayName: string;
   photoURL?: string;
+  firstName?: string;
+  lastName?: string;
   age?: number;
   gender?: string;
   phoneNumber?: string;
@@ -62,21 +64,55 @@ export interface PatientProfile {
 export const createOrUpdateProfile = async (user: User, additionalData: Partial<PatientProfile> = {}): Promise<PatientProfile> => {
   if (!user.uid) throw new Error('User UID is required');
   
-  const userRef = doc(db, 'patients', user.uid);
-  const existingUser = await getDoc(userRef);
-  
-  const profileData: PatientProfile = {
-    uid: user.uid,
-    email: user.email || '',
-    displayName: user.displayName || '',
-    photoURL: user.photoURL || undefined,
-    ...additionalData,
-    createdAt: existingUser.exists() ? existingUser.data().createdAt : new Date(),
-    updatedAt: new Date(),
-  };
+  try {
+    const userRef = doc(db, 'patients', user.uid);
+    const existingUser = await getDoc(userRef);
+    const existingData = existingUser.exists() ? existingUser.data() as PatientProfile : {};
+    
+    const profileData: PatientProfile = {
+      uid: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || '',
+      photoURL: user.photoURL || undefined,
+      firstName: additionalData.firstName || existingData.firstName || '',
+      lastName: additionalData.lastName || existingData.lastName || '',
+      age: additionalData.age !== undefined ? additionalData.age : existingData.age,
+      gender: additionalData.gender || existingData.gender,
+      phoneNumber: additionalData.phoneNumber || existingData.phoneNumber,
+      emergencyContact: additionalData.emergencyContact || existingData.emergencyContact,
+      medicalConditions: additionalData.medicalConditions || existingData.medicalConditions || [],
+      allergies: additionalData.allergies || existingData.allergies || [],
+      medications: additionalData.medications || existingData.medications || [],
+      createdAt: existingData.createdAt || new Date(),
+      updatedAt: new Date(),
+    };
 
-  await setDoc(userRef, profileData, { merge: true });
-  return profileData;
+    await setDoc(userRef, profileData, { merge: true });
+    return profileData;
+  } catch (error: any) {
+    console.error('Firebase profile error:', error);
+    // If offline, return a basic profile with user data
+    if (error.code === 'unavailable') {
+      return {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || undefined,
+        firstName: additionalData.firstName || '',
+        lastName: additionalData.lastName || '',
+        age: additionalData.age,
+        gender: additionalData.gender,
+        phoneNumber: additionalData.phoneNumber,
+        emergencyContact: additionalData.emergencyContact,
+        medicalConditions: additionalData.medicalConditions || [],
+        allergies: additionalData.allergies || [],
+        medications: additionalData.medications || [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+    throw error;
+  }
 };
 
 export const getPatientProfile = async (uid: string): Promise<PatientProfile | null> => {
