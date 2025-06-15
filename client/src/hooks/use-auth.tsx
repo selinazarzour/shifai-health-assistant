@@ -70,11 +70,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async () => {
     try {
       await signInWithGoogle();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign in error:', error);
+      
+      let errorMessage = "Could not sign in with Google.";
+      
+      if (error?.code === 'auth/configuration-not-found') {
+        errorMessage = "Firebase authentication is not properly configured. Please ensure Google sign-in is enabled in the Firebase console.";
+      } else if (error?.code === 'auth/unauthorized-domain') {
+        errorMessage = "This domain is not authorized for OAuth operations. Please add it to the Firebase console.";
+      } else if (error?.code === 'auth/operation-not-allowed') {
+        errorMessage = "Google sign-in is not enabled. Please enable it in the Firebase console.";
+      }
+      
       toast({
         title: "Sign In Error",
-        description: "Could not sign in with Google.",
+        description: errorMessage,
         variant: "destructive",
       });
     }

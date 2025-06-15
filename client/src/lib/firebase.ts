@@ -7,14 +7,27 @@ const firebaseConfig = {
   authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebasestorage.app`,
+  messagingSenderId: "123456789", // You can update this with your actual sender ID
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+// Validate Firebase configuration
+const requiredKeys = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID'];
+const missingKeys = requiredKeys.filter(key => !import.meta.env[key]);
+
+if (missingKeys.length > 0) {
+  console.error('Missing Firebase configuration:', missingKeys);
+  throw new Error(`Missing Firebase configuration: ${missingKeys.join(', ')}`);
+}
+
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 const provider = new GoogleAuthProvider();
+provider.addScope('email');
+provider.addScope('profile');
 
 // Authentication functions
 export const signInWithGoogle = () => {
