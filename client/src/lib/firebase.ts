@@ -1,0 +1,118 @@
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com`,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: `${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebasestorage.app`,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+const provider = new GoogleAuthProvider();
+
+// Authentication functions
+export const signInWithGoogle = () => {
+  return signInWithRedirect(auth, provider);
+};
+
+export const handleRedirectResult = () => {
+  return getRedirectResult(auth);
+};
+
+export const logOut = () => {
+  return signOut(auth);
+};
+
+export const onAuthStateChange = (callback: (user: User | null) => void) => {
+  return onAuthStateChanged(auth, callback);
+};
+
+// Firestore functions for patient profiles
+export interface PatientProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  age?: number;
+  gender?: string;
+  phoneNumber?: string;
+  emergencyContact?: string;
+  medicalConditions?: string[];
+  allergies?: string[];
+  medications?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const createOrUpdateProfile = async (user: User, additionalData: Partial<PatientProfile> = {}): Promise<PatientProfile> => {
+  if (!user.uid) throw new Error('User UID is required');
+  
+  const userRef = doc(db, 'patients', user.uid);
+  const existingUser = await getDoc(userRef);
+  
+  const profileData: PatientProfile = {
+    uid: user.uid,
+    email: user.email || '',
+    displayName: user.displayName || '',
+    photoURL: user.photoURL || undefined,
+    ...additionalData,
+    createdAt: existingUser.exists() ? existingUser.data().createdAt : new Date(),
+    updatedAt: new Date(),
+  };
+
+  await setDoc(userRef, profileData, { merge: true });
+  return profileData;
+};
+
+export const getPatientProfile = async (uid: string): Promise<PatientProfile | null> => {
+  const userRef = doc(db, 'patients', uid);
+  const userSnap = await getDoc(userRef);
+  
+  if (userSnap.exists()) {
+    return userSnap.data() as PatientProfile;
+  }
+  return null;
+};
+
+export const saveSymptomEntry = async (uid: string, entry: {
+  symptoms: string;
+  age?: number;
+  gender?: string;
+  language: string;
+  triageLevel: string;
+  triageResult: string;
+}) => {
+  const entriesRef = collection(db, 'symptomEntries');
+  const docRef = doc(entriesRef);
+  
+  await setDoc(docRef, {
+    ...entry,
+    uid,
+    timestamp: new Date(),
+    id: docRef.id,
+  });
+  
+  return docRef.id;
+};
+
+export const getPatientSymptomHistory = async (uid: string) => {
+  const entriesRef = collection(db, 'symptomEntries');
+  const q = query(
+    entriesRef,
+    where('uid', '==', uid),
+    orderBy('timestamp', 'desc')
+  );
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    timestamp: doc.data().timestamp.toDate(),
+  }));
+};
