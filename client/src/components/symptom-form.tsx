@@ -60,7 +60,7 @@ export function SymptomForm({ userId, onResult }: SymptomFormProps) {
   });
 
   const onSubmit = (data: SymptomFormData) => {
-    const triageResult = analyzeSymptoms(data.symptoms);
+    const triageResult = analyzeSymptoms(data.symptoms, language);
     onResult(triageResult, data.symptoms);
     
     submitSymptomMutation.mutate({

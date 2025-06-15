@@ -47,6 +47,8 @@ export class MemStorage implements IStorage {
     const entry: SymptomEntry = {
       ...insertEntry,
       id,
+      age: insertEntry.age ?? null,
+      gender: insertEntry.gender ?? null,
       timestamp: new Date(),
     };
     this.symptomEntries.set(id, entry);
