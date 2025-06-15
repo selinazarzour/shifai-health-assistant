@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { onAuthStateChange, handleRedirectResult, signInWithGoogle, logOut, createOrUpdateProfile, getPatientProfile, type PatientProfile } from '@/lib/firebase';
+import { onAuthStateChange, signInWithGoogle, logOut, createOrUpdateProfile, getPatientProfile, type PatientProfile } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
@@ -47,40 +47,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    // Handle redirect result on app start
-    handleRedirectResult().then((result) => {
-      if (result?.user) {
-        toast({
-          title: "Welcome!",
-          description: "Successfully signed in with Google.",
-        });
-      }
-    }).catch((error) => {
-      console.error('Redirect error:', error);
-      toast({
-        title: "Sign In Error",
-        description: "There was an issue signing you in.",
-        variant: "destructive",
-      });
-    });
+
 
     return unsubscribe;
   }, [toast]);
 
   const signIn = async () => {
     try {
-      await signInWithGoogle();
+      const result = await signInWithGoogle();
+      if (result?.user) {
+        toast({
+          title: "Welcome!",
+          description: "Successfully signed in with Google.",
+        });
+      }
     } catch (error: any) {
       console.error('Sign in error:', error);
       
       let errorMessage = "Could not sign in with Google.";
       
-      if (error?.code === 'auth/configuration-not-found') {
-        errorMessage = "Firebase authentication is not properly configured. Please ensure Google sign-in is enabled in the Firebase console.";
+      if (error?.code === 'auth/popup-closed-by-user') {
+        errorMessage = "Sign-in was cancelled.";
       } else if (error?.code === 'auth/unauthorized-domain') {
-        errorMessage = "This domain is not authorized for OAuth operations. Please add it to the Firebase console.";
+        errorMessage = "This domain is not authorized. Please add your Replit domain to Firebase console authorized domains.";
       } else if (error?.code === 'auth/operation-not-allowed') {
-        errorMessage = "Google sign-in is not enabled. Please enable it in the Firebase console.";
+        errorMessage = "Google sign-in is not enabled in Firebase console.";
+      } else if (error?.code === 'auth/popup-blocked') {
+        errorMessage = "Pop-up was blocked by browser. Please allow pop-ups for this site.";
       }
       
       toast({

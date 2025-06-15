@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -31,11 +31,7 @@ provider.addScope('profile');
 
 // Authentication functions
 export const signInWithGoogle = () => {
-  return signInWithRedirect(auth, provider);
-};
-
-export const handleRedirectResult = () => {
-  return getRedirectResult(auth);
+  return signInWithPopup(auth, provider);
 };
 
 export const logOut = () => {
