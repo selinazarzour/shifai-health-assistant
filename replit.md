@@ -99,7 +99,38 @@ The application uses Firebase Firestore with the following collections:
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+- June 15, 2025: Enhanced Firebase authentication system with popup-based Google Sign-In
+- June 15, 2025: Added mandatory firstName/lastName profile fields with automatic profile setup for new users  
+- June 15, 2025: Removed age/gender inputs from symptom form - now collected only in profile section
+- June 15, 2025: Fixed Firebase Firestore connection issues with proper error handling for offline scenarios
+- June 15, 2025: Updated doctor dashboard to display patient names instead of IDs from Firebase collections
+
+## Firebase Configuration Required
+
+The application uses Firebase Firestore in production mode. Update security rules to:
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /patients/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /symptomEntries/{entryId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+    }
+    match /symptomEntries/{entryId} {
+      allow read: if request.auth != null;
+    }
+  }
+}
+```
+
 ## Changelog
 
 Changelog:
 - June 15, 2025. Initial setup
+- June 15, 2025. Firebase authentication and profile system implementation

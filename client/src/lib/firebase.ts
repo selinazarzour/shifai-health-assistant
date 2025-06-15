@@ -69,13 +69,17 @@ export const createOrUpdateProfile = async (user: User, additionalData: Partial<
     const existingUser = await getDoc(userRef);
     const existingData = existingUser.exists() ? existingUser.data() as PatientProfile : {} as Partial<PatientProfile>;
     
+    const firstName = additionalData.firstName || existingData?.firstName || '';
+    const lastName = additionalData.lastName || existingData?.lastName || '';
+    const fullName = firstName && lastName ? `${firstName} ${lastName}` : user.displayName || '';
+
     const profileData: PatientProfile = {
       uid: user.uid,
       email: user.email || '',
-      displayName: user.displayName || '',
+      displayName: fullName,
       photoURL: user.photoURL || undefined,
-      firstName: additionalData.firstName || existingData?.firstName || '',
-      lastName: additionalData.lastName || existingData?.lastName || '',
+      firstName,
+      lastName,
       age: additionalData.age !== undefined ? additionalData.age : existingData?.age,
       gender: additionalData.gender || existingData?.gender,
       phoneNumber: additionalData.phoneNumber || existingData?.phoneNumber,
