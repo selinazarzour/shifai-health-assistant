@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, collection, query, where, orderBy, getDocs, enableNetwork, disableNetwork } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection, query, where, orderBy, getDocs, limit, enableNetwork, disableNetwork } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -265,4 +265,160 @@ export const getDashboardStats = async () => {
     monitorCases: entries.filter(e => e.triageLevel === 'monitor').length,
     safeCases: entries.filter(e => e.triageLevel === 'safe').length,
   };
+};
+
+// Chat and AI Report Functions
+export interface ChatMessage {
+  id: string;
+  uid: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  language: string;
+}
+
+export interface ClinicalReport {
+  id: string;
+  patientId: string;
+  generatedBy: string; // doctor uid
+  summary: string;
+  timeline: string;
+  riskAnalysis: string;
+  recommendations: string;
+  generatedAt: Date;
+}
+
+// Save chat message to Firebase
+export const saveChatMessage = async (message: Omit<ChatMessage, 'id'>) => {
+  try {
+    const messagesRef = collection(db, 'chatMessages');
+    const docRef = doc(messagesRef);
+    
+    const messageData = {
+      ...message,
+      timestamp: new Date(),
+      id: docRef.id,
+    };
+    
+    await setDoc(docRef, messageData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving chat message:', error);
+    throw error;
+  }
+};
+
+// Get chat history for a patient
+export const getChatHistory = async (uid: string): Promise<ChatMessage[]> => {
+  try {
+    const messagesRef = collection(db, 'chatMessages');
+    const q = query(
+      messagesRef,
+      where('uid', '==', uid),
+      orderBy('timestamp', 'desc'),
+      limit(50)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      timestamp: doc.data().timestamp.toDate(),
+    })) as ChatMessage[];
+  } catch (error: any) {
+    // Fallback for missing index
+    if (error.code === 'failed-precondition') {
+      const messagesRef = collection(db, 'chatMessages');
+      const q = query(messagesRef, where('uid', '==', uid));
+      
+      const querySnapshot = await getDocs(q);
+      const messages = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      })) as ChatMessage[];
+      
+      return messages
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, 50);
+    }
+    throw error;
+  }
+};
+
+// Save clinical report
+export const saveClinicalReport = async (report: Omit<ClinicalReport, 'id'>) => {
+  try {
+    const reportsRef = collection(db, 'clinicalReports');
+    const docRef = doc(reportsRef);
+    
+    const reportData = {
+      ...report,
+      generatedAt: new Date(),
+      id: docRef.id,
+    };
+    
+    await setDoc(docRef, reportData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving clinical report:', error);
+    throw error;
+  }
+};
+
+// Get clinical report for a patient
+export const getClinicalReport = async (patientId: string): Promise<ClinicalReport | null> => {
+  try {
+    const reportsRef = collection(db, 'clinicalReports');
+    const q = query(
+      reportsRef,
+      where('patientId', '==', patientId),
+      orderBy('generatedAt', 'desc'),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) return null;
+    
+    const doc = querySnapshot.docs[0];
+    return {
+      ...doc.data(),
+      generatedAt: doc.data().generatedAt.toDate(),
+    } as ClinicalReport;
+  } catch (error: any) {
+    // Fallback for missing index
+    if (error.code === 'failed-precondition') {
+      const reportsRef = collection(db, 'clinicalReports');
+      const q = query(reportsRef, where('patientId', '==', patientId));
+      
+      const querySnapshot = await getDocs(q);
+      if (querySnapshot.empty) return null;
+      
+      const reports = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        generatedAt: doc.data().generatedAt.toDate(),
+      })) as ClinicalReport[];
+      
+      return reports.sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())[0];
+    }
+    throw error;
+  }
+};
+
+// Get comprehensive patient data for AI analysis
+export const getPatientDataForAI = async (uid: string) => {
+  try {
+    const [profile, symptomEntries, chatHistory] = await Promise.all([
+      getPatientProfile(uid),
+      getPatientSymptomHistory(uid),
+      getChatHistory(uid)
+    ]);
+
+    return {
+      profile,
+      entries: symptomEntries,
+      chatHistory: chatHistory.filter(msg => msg.role === 'user').slice(0, 10) // Recent user messages
+    };
+  } catch (error) {
+    console.error('Error fetching patient data for AI:', error);
+    throw error;
+  }
 };
