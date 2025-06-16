@@ -126,8 +126,10 @@ export default function PatientPage() {
           <TriageResultDisplay result={triageResult} symptoms={symptoms} />
         )}
         
-        {/* AI Chat Interface - appears after triage result */}
-        <AIChatInterface visible={!!triageResult} />
+        {/* AI Chat Interface - always available for authenticated users */}
+        {user && profile && (
+          <AIChatInterface visible={true} />
+        )}
         
         <FirebasePatientHistory key={historyKey} />
       </main>

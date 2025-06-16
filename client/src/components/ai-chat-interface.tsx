@@ -69,9 +69,9 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      // Get recent symptom history from Firebase
+      // Get ALL symptom history from Firebase for comprehensive analysis
       const symptomHistory = await getPatientSymptomHistory(user.uid);
-      const recentSymptoms = symptomHistory.slice(0, 3).map((entry: any) => ({
+      const recentSymptoms = symptomHistory.map((entry: any) => ({
         symptoms: entry.symptoms || '',
         triageLevel: entry.triageLevel || 'safe',
         timestamp: entry.timestamp ? entry.timestamp.toISOString() : new Date().toISOString()

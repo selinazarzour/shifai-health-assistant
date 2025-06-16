@@ -201,7 +201,7 @@ function generateLocalChatResponse(message: string, context: PatientContext, lan
     en: {
       greeting: personalizedGreeting.en,
       symptoms_reference: context.recentSymptoms.length > 0 
-        ? `Based on your recent symptoms of "${context.recentSymptoms[0].symptoms}" (${context.recentSymptoms[0].triageLevel} level), ` 
+        ? `Looking at your symptom history: ${context.recentSymptoms.map(s => `"${s.symptoms}" (${s.triageLevel} level, ${s.timestamp.toLocaleDateString()})`).join(', ')}.` 
         : "",
       profile_context: patientProfile ? generateProfileContext(patientProfile, 'en') : "",
       general_advice: "I recommend monitoring your symptoms closely and consulting with a healthcare professional for proper evaluation.",
@@ -211,7 +211,7 @@ function generateLocalChatResponse(message: string, context: PatientContext, lan
     fr: {
       greeting: personalizedGreeting.fr,
       symptoms_reference: context.recentSymptoms.length > 0 
-        ? `Basé sur vos symptômes récents de "${context.recentSymptoms[0].symptoms}" (niveau ${context.recentSymptoms[0].triageLevel}), ` 
+        ? `En examinant votre historique de symptômes: ${context.recentSymptoms.map(s => `"${s.symptoms}" (niveau ${s.triageLevel}, ${s.timestamp.toLocaleDateString()})`).join(', ')}.` 
         : "",
       profile_context: patientProfile ? generateProfileContext(patientProfile, 'fr') : "",
       general_advice: "Je recommande de surveiller attentivement vos symptômes et de consulter un professionnel de la santé pour une évaluation appropriée.",
@@ -221,7 +221,7 @@ function generateLocalChatResponse(message: string, context: PatientContext, lan
     ar: {
       greeting: personalizedGreeting.ar,
       symptoms_reference: context.recentSymptoms.length > 0 
-        ? `بناءً على أعراضك الأخيرة "${context.recentSymptoms[0].symptoms}" (مستوى ${context.recentSymptoms[0].triageLevel})، ` 
+        ? `بالنظر إلى تاريخ أعراضك: ${context.recentSymptoms.map(s => `"${s.symptoms}" (مستوى ${s.triageLevel}، ${s.timestamp.toLocaleDateString()})`).join('، ')}.` 
         : "",
       profile_context: patientProfile ? generateProfileContext(patientProfile, 'ar') : "",
       general_advice: "أنصح بمراقبة أعراضك عن كثب واستشارة أخصائي الرعاية الصحية للحصول على تقييم مناسب.",
