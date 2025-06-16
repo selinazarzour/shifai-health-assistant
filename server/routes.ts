@@ -90,38 +90,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     language: z.string(),
     patientName: z.string(),
     profileData: z.object({
-      age: z.number().optional(),
-      gender: z.string().optional(),
+      age: z.number().nullable().optional(),
+      gender: z.string().nullable().optional(),
       medicalConditions: z.array(z.string()).optional(),
       allergies: z.array(z.string()).optional(),
       medications: z.array(z.string()).optional()
-    }).optional()
+    }).optional(),
+    recentSymptoms: z.array(z.object({
+      symptoms: z.string(),
+      triageLevel: z.string(),
+      timestamp: z.string()
+    })).optional()
   });
 
   app.post("/api/chat", async (req, res) => {
     try {
       const { message, uid, language, patientName, profileData } = chatMessageSchema.parse(req.body);
       
-      // Get patient context and history
-      const recentSymptoms = await storage.getSymptomEntriesByUser(uid);
-      
-      // Use actual profile data from request
-      const patientProfile = profileData || {
+      // Use actual profile data from request with proper null handling
+      const patientProfile = profileData ? {
+        name: patientName,
+        age: profileData.age || null,
+        gender: profileData.gender || null,
+        medicalConditions: profileData.medicalConditions || [],
+        allergies: profileData.allergies || [],
+        medications: profileData.medications || []
+      } : {
         name: patientName,
         age: null,
+        gender: null,
         medicalConditions: [],
         allergies: [],
         medications: []
       };
       
+      // Create context with Firebase symptom data (will be passed from client)
       const context: PatientContext = {
         uid,
         name: patientName,
-        recentSymptoms: recentSymptoms.slice(0, 3).map(entry => ({
-          symptoms: entry.symptoms,
-          triageLevel: entry.triageLevel,
-          timestamp: new Date(entry.timestamp)
-        })),
+        recentSymptoms: [], // Will be populated by client-side Firebase data
         language
       };
 
