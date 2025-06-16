@@ -233,8 +233,16 @@ export default function FirebaseDoctorDashboard() {
                       <TableRow key={entry.id} className="hover:bg-muted/50">
                         <TableCell className="font-medium">
                           <div>
-                            <div className="font-medium">{entry.patientName || 'Unknown Patient'}</div>
-                            <div className="text-sm text-gray-500">{entry.patientEmail}</div>
+                            <button 
+                              onClick={() => handlePatientClick(entry.uid, entry.patientName || 'Unknown Patient', entry.patientEmail)}
+                              className="text-left hover:text-primary transition-colors"
+                            >
+                              <div className="font-medium flex items-center space-x-2">
+                                <span>{entry.patientName || 'Unknown Patient'}</span>
+                                <FileText className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                              <div className="text-sm text-gray-500">{entry.patientEmail}</div>
+                            </button>
                           </div>
                         </TableCell>
                         <TableCell className="max-w-xs">
@@ -272,6 +280,17 @@ export default function FirebaseDoctorDashboard() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Patient Report Modal */}
+      {selectedPatient && (
+        <PatientReportModal
+          open={showReportModal}
+          onOpenChange={setShowReportModal}
+          patientId={selectedPatient.id}
+          patientName={selectedPatient.name}
+          patientEmail={selectedPatient.email}
+        />
+      )}
     </div>
   );
 }

@@ -101,11 +101,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+- June 16, 2025: Implemented AI chat interface for patients with multilingual support and symptom history personalization
+- June 16, 2025: Added AI-generated clinical reports for doctors with patient timelines and risk analysis
+- June 16, 2025: Fixed Firebase "failed-precondition" errors with fallback queries for missing composite indexes
+- June 16, 2025: Updated app branding to ShifAI (شفاء الذكي) across all language interfaces
 - June 15, 2025: Enhanced Firebase authentication system with popup-based Google Sign-In
 - June 15, 2025: Added mandatory firstName/lastName profile fields with automatic profile setup for new users  
 - June 15, 2025: Removed age/gender inputs from symptom form - now collected only in profile section
-- June 15, 2025: Fixed Firebase Firestore connection issues with proper error handling for offline scenarios
-- June 15, 2025: Updated doctor dashboard to display patient names instead of IDs from Firebase collections
 
 ## Firebase Configuration Required
 
