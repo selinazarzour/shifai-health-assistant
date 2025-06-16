@@ -43,10 +43,15 @@ export function PatientReportModal({
       const data = await getPatientDataForAI(patientId);
       setPatientData(data);
 
-      // Generate AI report
+      // Generate AI report with real patient data
       const response = await fetch(`/api/doctor/generate-report/${patientId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientName,
+          patientEmail,
+          patientData: data
+        })
       });
 
       const reportData = await response.json();

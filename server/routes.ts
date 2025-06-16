@@ -161,14 +161,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Clinical Report Generation
+  // Clinical Report Generation - Enhanced with Firebase data
   app.post("/api/doctor/generate-report/:patientId", async (req, res) => {
     try {
       const { patientId } = req.params;
-      const entries = await storage.getSymptomEntriesByUser(patientId);
+      const { patientName, patientEmail, patientData } = req.body;
       
-      // Generate structured clinical report
-      const report = generateLocalClinicalReport(entries, patientId);
+      // Generate report with real Firebase data
+      const report = generateEnhancedClinicalReport(patientId, patientName, patientEmail, patientData);
       
       res.json(report);
     } catch (error) {
@@ -276,28 +276,65 @@ function generateProfileContext(profile: any, language: string): string {
 // Generate specific advice based on message content and context
 function generateSpecificAdvice(message: string, context: PatientContext, profile: any, language: string): string {
   const lowerMessage = message.toLowerCase();
+  const userQuestion = message.trim();
+  const recentSymptoms = context.recentSymptoms;
+  const hasRecentSymptoms = recentSymptoms.length > 0;
   
-  // Pain-related advice
+  // Analyze specific patterns in user questions for personalized responses
+  if (lowerMessage.includes('worsening') || lowerMessage.includes('worse') || lowerMessage.includes('getting worse')) {
+    if (hasRecentSymptoms) {
+      const urgentSymptoms = recentSymptoms.filter(s => s.triageLevel === 'urgent' || s.triageLevel === 'monitor');
+      if (urgentSymptoms.length > 0) {
+        return language === 'en' ? 
+          `Since you've reported worsening symptoms, especially your ${urgentSymptoms[0].symptoms}, I strongly recommend seeking immediate medical attention. Worsening symptoms should not be ignored.` :
+        language === 'fr' ?
+          `Puisque vous avez signalé des symptômes qui s'aggravent, en particulier votre ${urgentSymptoms[0].symptoms}, je recommande fortement de consulter immédiatement un médecin.` :
+          `نظرًا لأنك أبلغت عن تفاقم الأعراض، خاصة ${urgentSymptoms[0].symptoms}، أنصح بشدة بطلب العناية الطبية الفورية.`;
+      }
+    }
+  }
+  
+  if (lowerMessage.includes('should i see') || lowerMessage.includes('doctor') || lowerMessage.includes('hospital')) {
+    const urgentCount = recentSymptoms.filter(s => s.triageLevel === 'urgent').length;
+    const monitorCount = recentSymptoms.filter(s => s.triageLevel === 'monitor').length;
+    
+    if (urgentCount > 0) {
+      return language === 'en' ? 
+        `Yes, based on your urgent-level symptoms, you should seek immediate medical attention. Don't delay.` :
+      language === 'fr' ?
+        `Oui, basé sur vos symptômes de niveau urgent, vous devriez consulter immédiatement un médecin.` :
+        `نعم، بناءً على أعراضك العاجلة، يجب أن تطلب العناية الطبية الفورية.`;
+    } else if (monitorCount > 0) {
+      return language === 'en' ? 
+        `Given your monitor-level symptoms, scheduling an appointment with your doctor within the next few days would be wise.` :
+      language === 'fr' ?
+        `Étant donné vos symptômes de niveau surveillance, prendre rendez-vous avec votre médecin dans les prochains jours serait sage.` :
+        `نظرًا لأعراضك التي تحتاج للمراقبة، سيكون من الحكمة تحديد موعد مع طبيبك خلال الأيام القليلة القادمة.`;
+    }
+  }
+  
+  if (lowerMessage.includes('what should i do') || lowerMessage.includes('next steps')) {
+    if (hasRecentSymptoms) {
+      const latestSymptom = recentSymptoms[0];
+      return language === 'en' ? 
+        `For your ${latestSymptom.symptoms} (${latestSymptom.triageLevel} level), I recommend: 1) Continue monitoring symptoms, 2) Rest and hydration, 3) Contact healthcare provider if symptoms worsen, 4) Keep a symptom diary.` :
+      language === 'fr' ?
+        `Pour votre ${latestSymptom.symptoms} (niveau ${latestSymptom.triageLevel}), je recommande: 1) Continuer à surveiller les symptômes, 2) Repos et hydratation, 3) Contacter un professionnel de santé si les symptômes s'aggravent.` :
+        `بالنسبة لـ ${latestSymptom.symptoms} (مستوى ${latestSymptom.triageLevel})، أنصح بـ: 1) مواصلة مراقبة الأعراض، 2) الراحة والترطيب، 3) الاتصال بمقدم الرعاية الصحية إذا تفاقمت الأعراض.`;
+    }
+  }
+  
+  // Pain-related advice with context
   if (lowerMessage.includes('pain') || lowerMessage.includes('hurt') || lowerMessage.includes('ache')) {
+    const painContext = hasRecentSymptoms && recentSymptoms.some(s => s.symptoms.toLowerCase().includes('pain')) ? 
+      ` Given your recent pain reports, ` : ' ';
     const painAdvice = {
-      en: "For pain management, consider rest, proper hydration, and gentle movement if tolerated.",
-      fr: "Pour la gestion de la douleur, considérez le repos, une hydratation adéquate et des mouvements doux si tolérés.",
-      ar: "لإدارة الألم، فكر في الراحة والترطيب المناسب والحركة اللطيفة إذا كان ذلك مقبولاً."
+      en: `For pain management,${painContext}consider rest, proper hydration, and gentle movement if tolerated. Monitor pain levels and seek care if severe.`,
+      fr: `Pour la gestion de la douleur,${painContext}considérez le repos, une hydratation adéquate et des mouvements doux si tolérés.`,
+      ar: `لإدارة الألم،${painContext}فكر في الراحة والترطيب المناسب والحركة اللطيفة إذا كان ذلك مقبولاً.`
     };
     return painAdvice[language as keyof typeof painAdvice] || painAdvice.en;
   }
-  
-  // Fever-related advice
-  if (lowerMessage.includes('fever') || lowerMessage.includes('temperature') || lowerMessage.includes('hot')) {
-    const feverAdvice = {
-      en: "Monitor your temperature regularly, stay hydrated, and rest. Seek medical attention if fever persists or rises above 102°F (39°C).",
-      fr: "Surveillez votre température régulièrement, restez hydraté et reposez-vous. Consultez un médecin si la fièvre persiste ou dépasse 39°C.",
-      ar: "راقب درجة حرارتك بانتظام، واشرب الكثير من السوائل، واحصل على الراحة. اطلب العناية الطبية إذا استمرت الحمى أو ارتفعت فوق 39 درجة مئوية."
-    };
-    return feverAdvice[language as keyof typeof feverAdvice] || feverAdvice.en;
-  }
-  
-  // Stress/anxiety related
   if (lowerMessage.includes('stress') || lowerMessage.includes('anxiety') || lowerMessage.includes('worried')) {
     const stressAdvice = {
       en: "Consider stress management techniques like deep breathing, meditation, or gentle exercise. If anxiety persists, professional support can be very helpful.",
@@ -317,33 +354,55 @@ function generateSpecificAdvice(message: string, context: PatientContext, profil
   return generalAdvice[language as keyof typeof generalAdvice] || generalAdvice.en;
 }
 
-function generateLocalClinicalReport(entries: any[], patientId: string) {
-  const totalEntries = entries.length;
-  const urgentEntries = entries.filter(e => e.triageLevel === 'urgent').length;
-  const monitorEntries = entries.filter(e => e.triageLevel === 'monitor').length;
-  const safeEntries = entries.filter(e => e.triageLevel === 'safe').length;
+function generateEnhancedClinicalReport(patientId: string, patientName: string, patientEmail: string, patientData: any) {
+  const entries = patientData?.entries || [];
+  const profile = patientData?.profile || {};
   
-  const latestEntry = entries[0];
-  const timespan = entries.length > 1 
-    ? `over ${Math.ceil((Date.now() - new Date(entries[entries.length - 1].timestamp).getTime()) / (1000 * 60 * 60 * 24))} days`
-    : 'recently';
+  const totalEntries = entries.length;
+  const urgentEntries = entries.filter((e: any) => e.triageLevel === 'urgent').length;
+  const monitorEntries = entries.filter((e: any) => e.triageLevel === 'monitor').length;
+  const safeEntries = entries.filter((e: any) => e.triageLevel === 'safe').length;
+
+  // Enhanced summary with real patient data
+  const symptomsList = entries.slice(0, 5).map((e: any) => `"${e.symptoms}" (${e.triageLevel})`).join(', ');
+  const ageContext = profile.age ? ` Age: ${profile.age}.` : '';
+  const conditionsContext = profile.medicalConditions?.length > 0 ? ` Medical history: ${profile.medicalConditions.join(', ')}.` : '';
+  
+  // Timeline analysis
+  const sortedEntries = entries.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const timelineEvents = sortedEntries.slice(0, 5).map((e: any) => 
+    `${new Date(e.timestamp).toLocaleDateString()}: ${e.symptoms} (${e.triageLevel})`
+  ).join('\n');
+
+  // Risk assessment based on patterns
+  let riskLevel = 'LOW';
+  let riskDetails = 'Symptoms appear manageable with routine care.';
+  
+  if (urgentEntries > 0) {
+    riskLevel = 'HIGH PRIORITY';
+    riskDetails = `${urgentEntries} urgent-level symptoms detected. Immediate evaluation required.`;
+  } else if (monitorEntries > 1) {
+    riskLevel = 'MODERATE';
+    riskDetails = `Multiple monitor-level symptoms (${monitorEntries}) suggest ongoing health concerns requiring professional assessment.`;
+  } else if (monitorEntries === 1) {
+    riskLevel = 'MODERATE';
+    riskDetails = 'Single monitor-level symptom warrants medical consultation within 2-3 days.';
+  }
+
+  // Personalized recommendations
+  let recommendations = 'Continue symptom monitoring and maintain regular healthcare check-ups.';
+  if (urgentEntries > 0) {
+    recommendations = 'IMMEDIATE ACTION: Urgent medical evaluation required. Consider emergency care if symptoms persist or worsen.';
+  } else if (monitorEntries > 0) {
+    recommendations = `Schedule medical appointment within 48-72 hours. Monitor for symptom progression.${profile.age && profile.age > 65 ? ' Given patient age, prioritize prompt evaluation.' : ''}`;
+  }
 
   return {
     patientId,
-    summary: `Patient has submitted ${totalEntries} symptom entries ${timespan}. Latest reported symptoms: "${latestEntry?.symptoms || 'None'}". Risk distribution shows ${urgentEntries} urgent, ${monitorEntries} monitor, and ${safeEntries} safe classifications.`,
-    timeline: entries.map((entry, index) => 
-      `${new Date(entry.timestamp).toLocaleDateString()}: ${entry.symptoms} (${entry.triageLevel})`
-    ).join('\n'),
-    riskAnalysis: urgentEntries > 0 
-      ? `HIGH PRIORITY: ${urgentEntries} urgent entries require immediate attention.`
-      : monitorEntries > 0 
-        ? `MODERATE: ${monitorEntries} entries require monitoring.`
-        : `LOW RISK: Most entries classified as safe.`,
-    recommendations: urgentEntries > 0 
-      ? 'Immediate clinical evaluation recommended for urgent symptoms.'
-      : monitorEntries > 0 
-        ? 'Schedule follow-up appointment to monitor symptoms.'
-        : 'Continue routine care and monitoring.',
+    summary: `Patient ${patientName} (${patientEmail}) has submitted ${totalEntries} symptom entries.${ageContext}${conditionsContext} Recent symptoms include: ${symptomsList || 'No recent symptoms recorded'}.`,
+    timeline: totalEntries > 0 ? `Recent symptom progression:\n${timelineEvents}` : 'No symptom timeline available.',
+    riskAnalysis: `${riskLevel}: ${riskDetails} Distribution: ${urgentEntries} urgent, ${monitorEntries} monitor, ${safeEntries} safe.`,
+    recommendations: recommendations,
     generatedAt: new Date()
   };
 }
