@@ -4,6 +4,7 @@ import { UserRound, Heart, Settings, LogOut } from "lucide-react";
 import { FirebaseSymptomForm } from "@/components/firebase-symptom-form";
 import { TriageResultDisplay } from "@/components/triage-result";
 import { FirebasePatientHistory } from "@/components/firebase-patient-history";
+import { AIChatInterface } from "@/components/ai-chat-interface";
 import { LanguageToggle } from "@/components/language-toggle";
 import { DoctorLoginModal } from "@/components/doctor-login-modal";
 import { PatientProfile } from "@/components/patient-profile";
@@ -124,6 +125,9 @@ export default function PatientPage() {
         {triageResult && (
           <TriageResultDisplay result={triageResult} symptoms={symptoms} />
         )}
+        
+        {/* AI Chat Interface - appears after triage result */}
+        <AIChatInterface visible={!!triageResult} />
         
         <FirebasePatientHistory key={historyKey} />
       </main>

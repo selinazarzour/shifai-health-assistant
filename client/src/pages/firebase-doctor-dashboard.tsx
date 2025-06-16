@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Users, AlertTriangle, Eye, CheckCircle } from "lucide-react";
+import { ArrowLeft, Users, AlertTriangle, Eye, CheckCircle, FileText } from "lucide-react";
 import { useLanguage } from "@/hooks/use-language";
 import { LanguageToggle } from "@/components/language-toggle";
+import { PatientReportModal } from "@/components/patient-report-modal";
 import { getAllSymptomEntries, getSymptomEntriesByTriageLevel, getDashboardStats } from "@/lib/firebase";
 import { Link } from "wouter";
 
@@ -37,6 +38,12 @@ export default function FirebaseDoctorDashboard() {
   const [entries, setEntries] = useState<FirebaseSymptomEntry[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -85,6 +92,15 @@ export default function FirebaseDoctorDashboard() {
       case 'safe': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const handlePatientClick = (patientId: string, patientName: string, patientEmail: string) => {
+    setSelectedPatient({
+      id: patientId,
+      name: patientName,
+      email: patientEmail
+    });
+    setShowReportModal(true);
   };
 
   return (
