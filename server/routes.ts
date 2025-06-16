@@ -233,17 +233,38 @@ function generateLocalChatResponse(message: string, context: PatientContext, lan
   const lang = language as keyof typeof responses;
   const langResponses = responses[lang] || responses.en;
   
-  let response = langResponses.greeting + " " + langResponses.symptoms_reference + langResponses.profile_context + langResponses.specific_advice;
+  // Direct conversational response based on user's question
+  const lowerMessage = message.toLowerCase();
+  const userName = context.name.split(' ')[0];
   
-  // Add emergency advice for urgent keywords
-  const urgentKeywords = ['chest pain', 'difficulty breathing', 'unconscious', 'severe pain', 'bleeding', 'suicide', 'overdose'];
-  if (urgentKeywords.some(keyword => message.toLowerCase().includes(keyword))) {
-    response += "\n\n" + langResponses.emergency;
-  } else {
-    response += " " + langResponses.general_advice;
+  // Simple greetings
+  if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
+    const greetings = {
+      en: `Hi ${userName}! I'm ShifAI, your health assistant. How can I help you today?`,
+      fr: `Salut ${userName}! Je suis ShifAI, votre assistant santé. Comment puis-je vous aider?`,
+      ar: `مرحباً ${userName}! أنا شفاء الذكي، مساعدك الصحي. كيف يمكنني مساعدتك؟`
+    };
+    return greetings[lang] || greetings.en;
+  }
+
+  // Get specific advice using symptom context without listing everything
+  const response = generateSpecificAdvice(message, context, patientProfile, language);
+  
+  // Add disclaimer only for health questions
+  const isHealthQuestion = lowerMessage.includes('pain') || lowerMessage.includes('symptom') || 
+                          lowerMessage.includes('hurt') || lowerMessage.includes('sick') ||
+                          lowerMessage.includes('doctor') || lowerMessage.includes('worse');
+  
+  if (isHealthQuestion) {
+    const shortDisclaimers = {
+      en: "⚠️ AI guidance - consult a healthcare professional for diagnosis.",
+      fr: "⚠️ Conseil IA - consultez un professionnel de santé.",
+      ar: "⚠️ إرشادات ذكية - استشر أخصائي الرعاية الصحية."
+    };
+    return `${response}\n\n${shortDisclaimers[lang] || shortDisclaimers.en}`;
   }
   
-  return response + "\n\n" + disclaimers[lang as keyof typeof disclaimers];
+  return response;
 }
 
 // Generate profile-specific context
@@ -276,64 +297,82 @@ function generateProfileContext(profile: any, language: string): string {
 // Generate specific advice based on message content and context
 function generateSpecificAdvice(message: string, context: PatientContext, profile: any, language: string): string {
   const lowerMessage = message.toLowerCase();
-  const userQuestion = message.trim();
   const recentSymptoms = context.recentSymptoms;
   const hasRecentSymptoms = recentSymptoms.length > 0;
   
-  // Analyze specific patterns in user questions for personalized responses
+  // Analyze symptom context to provide intelligent responses
+  const hasStomachIssues = hasRecentSymptoms && recentSymptoms.some(s => 
+    s.symptoms.toLowerCase().includes('stomach') || s.symptoms.toLowerCase().includes('pain')
+  );
+  const hasHeadache = hasRecentSymptoms && recentSymptoms.some(s => 
+    s.symptoms.toLowerCase().includes('headache') || s.symptoms.toLowerCase().includes('head')
+  );
+  const hasMonitorLevel = hasRecentSymptoms && recentSymptoms.some(s => s.triageLevel === 'monitor');
+  const hasUrgentLevel = hasRecentSymptoms && recentSymptoms.some(s => s.triageLevel === 'urgent');
+
+  // Worsening symptoms - context-aware response
   if (lowerMessage.includes('worsening') || lowerMessage.includes('worse') || lowerMessage.includes('getting worse')) {
-    if (hasRecentSymptoms) {
-      const urgentSymptoms = recentSymptoms.filter(s => s.triageLevel === 'urgent' || s.triageLevel === 'monitor');
-      if (urgentSymptoms.length > 0) {
-        return language === 'en' ? 
-          `Since you've reported worsening symptoms, especially your ${urgentSymptoms[0].symptoms}, I strongly recommend seeking immediate medical attention. Worsening symptoms should not be ignored.` :
-        language === 'fr' ?
-          `Puisque vous avez signalé des symptômes qui s'aggravent, en particulier votre ${urgentSymptoms[0].symptoms}, je recommande fortement de consulter immédiatement un médecin.` :
-          `نظرًا لأنك أبلغت عن تفاقم الأعراض، خاصة ${urgentSymptoms[0].symptoms}، أنصح بشدة بطلب العناية الطبية الفورية.`;
-      }
+    if (hasUrgentLevel || hasMonitorLevel) {
+      return language === 'en' ? 
+        `Worsening symptoms are concerning, especially given your recent health reports. I recommend seeking medical attention promptly. Don't wait if symptoms continue to deteriorate.` :
+      language === 'fr' ?
+        `L'aggravation des symptômes est préoccupante, surtout compte tenu de vos rapports de santé récents. Je recommande de consulter rapidement un médecin.` :
+        `تفاقم الأعراض مثير للقلق، خاصة مع تقاريرك الصحية الأخيرة. أنصح بطلب العناية الطبية على الفور.`;
     }
+    return language === 'en' ? 
+      `If your symptoms are getting worse, it's important to monitor them closely and consider seeing a healthcare provider if the trend continues.` :
+    language === 'fr' ?
+      `Si vos symptômes s'aggravent, il est important de les surveiller attentivement et de consulter un professionnel de santé si la tendance continue.` :
+      `إذا كانت أعراضك تتفاقم، من المهم مراقبتها عن كثب والنظر في رؤية مقدم الرعاية الصحية إذا استمر هذا الاتجاه.`;
   }
   
+  // Doctor consultation questions
   if (lowerMessage.includes('should i see') || lowerMessage.includes('doctor') || lowerMessage.includes('hospital')) {
-    const urgentCount = recentSymptoms.filter(s => s.triageLevel === 'urgent').length;
-    const monitorCount = recentSymptoms.filter(s => s.triageLevel === 'monitor').length;
-    
-    if (urgentCount > 0) {
+    if (hasUrgentLevel) {
       return language === 'en' ? 
-        `Yes, based on your urgent-level symptoms, you should seek immediate medical attention. Don't delay.` :
+        `Yes, based on your symptom severity, you should seek medical attention promptly.` :
       language === 'fr' ?
-        `Oui, basé sur vos symptômes de niveau urgent, vous devriez consulter immédiatement un médecin.` :
-        `نعم، بناءً على أعراضك العاجلة، يجب أن تطلب العناية الطبية الفورية.`;
-    } else if (monitorCount > 0) {
+        `Oui, basé sur la gravité de vos symptômes, vous devriez consulter rapidement un médecin.` :
+        `نعم، بناءً على شدة أعراضك، يجب أن تطلب العناية الطبية على الفور.`;
+    } else if (hasMonitorLevel) {
       return language === 'en' ? 
-        `Given your monitor-level symptoms, scheduling an appointment with your doctor within the next few days would be wise.` :
+        `Given your recent symptoms, scheduling an appointment with your doctor would be a good idea, especially if they persist.` :
       language === 'fr' ?
-        `Étant donné vos symptômes de niveau surveillance, prendre rendez-vous avec votre médecin dans les prochains jours serait sage.` :
-        `نظرًا لأعراضك التي تحتاج للمراقبة، سيكون من الحكمة تحديد موعد مع طبيبك خلال الأيام القليلة القادمة.`;
+        `Étant donné vos symptômes récents, prendre rendez-vous avec votre médecin serait une bonne idée, surtout s'ils persistent.` :
+        `نظرًا لأعراضك الأخيرة، سيكون من الجيد تحديد موعد مع طبيبك، خاصة إذا استمرت.`;
     }
+    return language === 'en' ? 
+      `Consider seeing a doctor if symptoms persist, worsen, or if you're concerned about your health.` :
+    language === 'fr' ?
+      `Consultez un médecin si les symptômes persistent, s'aggravent ou si vous êtes préoccupé par votre santé.` :
+      `فكر في رؤية طبيب إذا استمرت الأعراض أو تفاقمت أو إذا كنت قلقًا بشأن صحتك.`;
   }
   
-  if (lowerMessage.includes('what should i do') || lowerMessage.includes('next steps')) {
-    if (hasRecentSymptoms) {
-      const latestSymptom = recentSymptoms[0];
-      return language === 'en' ? 
-        `For your ${latestSymptom.symptoms} (${latestSymptom.triageLevel} level), I recommend: 1) Continue monitoring symptoms, 2) Rest and hydration, 3) Contact healthcare provider if symptoms worsen, 4) Keep a symptom diary.` :
-      language === 'fr' ?
-        `Pour votre ${latestSymptom.symptoms} (niveau ${latestSymptom.triageLevel}), je recommande: 1) Continuer à surveiller les symptômes, 2) Repos et hydratation, 3) Contacter un professionnel de santé si les symptômes s'aggravent.` :
-        `بالنسبة لـ ${latestSymptom.symptoms} (مستوى ${latestSymptom.triageLevel})، أنصح بـ: 1) مواصلة مراقبة الأعراض، 2) الراحة والترطيب، 3) الاتصال بمقدم الرعاية الصحية إذا تفاقمت الأعراض.`;
-    }
+  // Stomach pain questions
+  if (lowerMessage.includes('stomach') && hasStomachIssues) {
+    return language === 'en' ? 
+      `For stomach discomfort, try eating bland foods, stay hydrated, and rest. If pain is severe or persistent, seek medical care.` :
+    language === 'fr' ?
+      `Pour l'inconfort gastrique, essayez de manger des aliments fades, restez hydraté et reposez-vous. Si la douleur est sévère ou persistante, consultez un médecin.` :
+      `لعدم الراحة في المعدة، جرب تناول الأطعمة الخفيفة، واشرب الكثير من السوائل، واحصل على الراحة. إذا كان الألم شديدًا أو مستمرًا، اطلب الرعاية الطبية.`;
   }
   
-  // Pain-related advice with context
-  if (lowerMessage.includes('pain') || lowerMessage.includes('hurt') || lowerMessage.includes('ache')) {
-    const painContext = hasRecentSymptoms && recentSymptoms.some(s => s.symptoms.toLowerCase().includes('pain')) ? 
-      ` Given your recent pain reports, ` : ' ';
-    const painAdvice = {
-      en: `For pain management,${painContext}consider rest, proper hydration, and gentle movement if tolerated. Monitor pain levels and seek care if severe.`,
-      fr: `Pour la gestion de la douleur,${painContext}considérez le repos, une hydratation adéquate et des mouvements doux si tolérés.`,
-      ar: `لإدارة الألم،${painContext}فكر في الراحة والترطيب المناسب والحركة اللطيفة إذا كان ذلك مقبولاً.`
-    };
-    return painAdvice[language as keyof typeof painAdvice] || painAdvice.en;
+  // Headache questions
+  if (lowerMessage.includes('headache') && hasHeadache) {
+    return language === 'en' ? 
+      `For headaches, ensure you're well-hydrated, get adequate rest, and try to manage stress. If headaches are frequent or severe, consult your doctor.` :
+    language === 'fr' ?
+      `Pour les maux de tête, assurez-vous d'être bien hydraté, reposez-vous suffisamment et essayez de gérer le stress. Si les maux de tête sont fréquents ou sévères, consultez votre médecin.` :
+      `للصداع، تأكد من شرب الكثير من السوائل، واحصل على راحة كافية، وحاول إدارة الضغط. إذا كان الصداع متكررًا أو شديدًا، استشر طبيبك.`;
+  }
+  
+  // General pain management
+  if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
+    return language === 'en' ? 
+      `For pain management, rest and gentle movement can help. Stay hydrated and monitor pain levels. Seek medical attention if pain is severe or interfering with daily activities.` :
+    language === 'fr' ?
+      `Pour la gestion de la douleur, le repos et les mouvements doux peuvent aider. Restez hydraté et surveillez les niveaux de douleur. Consultez un médecin si la douleur est sévère.` :
+      `لإدارة الألم، يمكن أن تساعد الراحة والحركة اللطيفة. اشرب الكثير من السوائل وراقب مستويات الألم. اطلب العناية الطبية إذا كان الألم شديدًا.`;
   }
   if (lowerMessage.includes('stress') || lowerMessage.includes('anxiety') || lowerMessage.includes('worried')) {
     const stressAdvice = {
