@@ -152,48 +152,104 @@ export const saveSymptomEntry = async (uid: string, entry: {
 };
 
 export const getPatientSymptomHistory = async (uid: string) => {
-  const entriesRef = collection(db, 'symptomEntries');
-  const q = query(
-    entriesRef,
-    where('uid', '==', uid),
-    orderBy('timestamp', 'desc')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp.toDate(),
-  }));
+  try {
+    const entriesRef = collection(db, 'symptomEntries');
+    const q = query(
+      entriesRef,
+      where('uid', '==', uid),
+      orderBy('timestamp', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().timestamp.toDate(),
+    }));
+  } catch (error: any) {
+    // If composite index is missing, fallback to simple query and sort in memory
+    if (error.code === 'failed-precondition') {
+      console.warn('Firestore composite index missing, using fallback query');
+      const entriesRef = collection(db, 'symptomEntries');
+      const q = query(entriesRef, where('uid', '==', uid));
+      
+      const querySnapshot = await getDocs(q);
+      const entries = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      }));
+      
+      // Sort in memory by timestamp descending
+      return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    }
+    throw error;
+  }
 };
 
 // Doctor dashboard functions
 export const getAllSymptomEntries = async () => {
-  const entriesRef = collection(db, 'symptomEntries');
-  const q = query(entriesRef, orderBy('timestamp', 'desc'));
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp.toDate(),
-  }));
+  try {
+    const entriesRef = collection(db, 'symptomEntries');
+    const q = query(entriesRef, orderBy('timestamp', 'desc'));
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().timestamp.toDate(),
+    }));
+  } catch (error: any) {
+    // Fallback to simple query if index is missing
+    if (error.code === 'failed-precondition') {
+      console.warn('Firestore index missing for getAllSymptomEntries, using fallback');
+      const entriesRef = collection(db, 'symptomEntries');
+      const querySnapshot = await getDocs(entriesRef);
+      const entries = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      }));
+      
+      return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    }
+    throw error;
+  }
 };
 
 export const getSymptomEntriesByTriageLevel = async (level: string) => {
-  const entriesRef = collection(db, 'symptomEntries');
-  const q = query(
-    entriesRef,
-    where('triageLevel', '==', level),
-    orderBy('timestamp', 'desc')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp.toDate(),
-  }));
+  try {
+    const entriesRef = collection(db, 'symptomEntries');
+    const q = query(
+      entriesRef,
+      where('triageLevel', '==', level),
+      orderBy('timestamp', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().timestamp.toDate(),
+    }));
+  } catch (error: any) {
+    // Fallback for missing composite index
+    if (error.code === 'failed-precondition') {
+      console.warn('Firestore index missing for getSymptomEntriesByTriageLevel, using fallback');
+      const entriesRef = collection(db, 'symptomEntries');
+      const q = query(entriesRef, where('triageLevel', '==', level));
+      
+      const querySnapshot = await getDocs(q);
+      const entries = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      }));
+      
+      return entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    }
+    throw error;
+  }
 };
 
 export const getDashboardStats = async () => {
