@@ -105,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { message, uid, language, patientName, profileData } = chatMessageSchema.parse(req.body);
+      const { message, uid, language, patientName, profileData, recentSymptoms } = chatMessageSchema.parse(req.body);
       
       // Use actual profile data from request with proper null handling
       const patientProfile = profileData ? {
@@ -124,11 +124,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         medications: []
       };
       
-      // Create context with Firebase symptom data (will be passed from client)
+      // Create context with real Firebase symptom data
       const context: PatientContext = {
         uid,
         name: patientName,
-        recentSymptoms: [], // Will be populated by client-side Firebase data
+        recentSymptoms: (recentSymptoms || []).map(symptom => ({
+          symptoms: symptom.symptoms,
+          triageLevel: symptom.triageLevel,
+          timestamp: new Date(symptom.timestamp)
+        })),
         language
       };
 

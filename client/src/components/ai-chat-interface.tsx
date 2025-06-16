@@ -7,7 +7,7 @@ import { MessageCircle, Send, Bot, User, Loader2 } from "lucide-react";
 import { useLanguage } from "@/hooks/use-language";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { saveChatMessage, getChatHistory, type ChatMessage } from "@/lib/firebase";
+import { saveChatMessage, getChatHistory, getPatientSymptomHistory, type ChatMessage } from "@/lib/firebase";
 
 interface AIChatInterfaceProps {
   visible: boolean;
@@ -69,7 +69,15 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      // Get AI response from server with profile data
+      // Get recent symptom history from Firebase
+      const symptomHistory = await getPatientSymptomHistory(user.uid);
+      const recentSymptoms = symptomHistory.slice(0, 3).map((entry: any) => ({
+        symptoms: entry.symptoms || '',
+        triageLevel: entry.triageLevel || 'safe',
+        timestamp: entry.timestamp ? entry.timestamp.toISOString() : new Date().toISOString()
+      }));
+
+      // Get AI response from server with profile data and symptom history
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,7 +92,8 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
             medicalConditions: profile.medicalConditions || [],
             allergies: profile.allergies || [],
             medications: profile.medications || []
-          }
+          },
+          recentSymptoms
         })
       });
 
