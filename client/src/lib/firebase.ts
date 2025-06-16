@@ -65,25 +65,25 @@ export const createOrUpdateProfile = async (user: User, additionalData: Partial<
   if (!user.uid) throw new Error('User UID is required');
   
   try {
-    const userRef = doc(db, 'patients', user.uid);
-    const existingUser = await getDoc(userRef);
-    const existingData = existingUser.exists() ? existingUser.data() as PatientProfile : {} as Partial<PatientProfile>;
+    const userRef = doc(db, 'users', user.uid);
+    const existingDoc = await getDoc(userRef);
+    const existingData = existingDoc.exists() ? existingDoc.data() as Partial<PatientProfile> : {};
     
     const firstName = additionalData.firstName || existingData?.firstName || '';
     const lastName = additionalData.lastName || existingData?.lastName || '';
     const fullName = firstName && lastName ? `${firstName} ${lastName}` : user.displayName || '';
 
-    const profileData: PatientProfile = {
+    const profileData = {
       uid: user.uid,
       email: user.email || '',
       displayName: fullName,
-      photoURL: user.photoURL || undefined,
-      firstName,
-      lastName,
-      age: additionalData.age !== undefined ? additionalData.age : existingData?.age,
-      gender: additionalData.gender || existingData?.gender,
-      phoneNumber: additionalData.phoneNumber || existingData?.phoneNumber,
-      emergencyContact: additionalData.emergencyContact || existingData?.emergencyContact,
+      photoURL: user.photoURL || null,
+      firstName: firstName || null,
+      lastName: lastName || null,
+      age: additionalData.age !== undefined ? additionalData.age : (existingData?.age || null),
+      gender: additionalData.gender || existingData?.gender || null,
+      phoneNumber: additionalData.phoneNumber || existingData?.phoneNumber || null,
+      emergencyContact: additionalData.emergencyContact || existingData?.emergencyContact || null,
       medicalConditions: additionalData.medicalConditions || existingData?.medicalConditions || [],
       allergies: additionalData.allergies || existingData?.allergies || [],
       medications: additionalData.medications || existingData?.medications || [],
@@ -92,41 +92,26 @@ export const createOrUpdateProfile = async (user: User, additionalData: Partial<
     };
 
     await setDoc(userRef, profileData, { merge: true });
-    return profileData;
+    return profileData as PatientProfile;
   } catch (error: any) {
     console.error('Firebase profile error:', error);
-    // If offline, return a basic profile with user data
-    if (error.code === 'unavailable') {
-      return {
-        uid: user.uid,
-        email: user.email || '',
-        displayName: user.displayName || '',
-        photoURL: user.photoURL || undefined,
-        firstName: additionalData.firstName || '',
-        lastName: additionalData.lastName || '',
-        age: additionalData.age,
-        gender: additionalData.gender,
-        phoneNumber: additionalData.phoneNumber,
-        emergencyContact: additionalData.emergencyContact,
-        medicalConditions: additionalData.medicalConditions || [],
-        allergies: additionalData.allergies || [],
-        medications: additionalData.medications || [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
     throw error;
   }
 };
 
 export const getPatientProfile = async (uid: string): Promise<PatientProfile | null> => {
-  const userRef = doc(db, 'patients', uid);
-  const userSnap = await getDoc(userRef);
-  
-  if (userSnap.exists()) {
-    return userSnap.data() as PatientProfile;
+  try {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      return userSnap.data() as PatientProfile;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    return null;
   }
-  return null;
 };
 
 export const saveSymptomEntry = async (uid: string, entry: {
@@ -137,22 +122,33 @@ export const saveSymptomEntry = async (uid: string, entry: {
   triageLevel: string;
   triageResult: string;
 }) => {
-  const entriesRef = collection(db, 'symptomEntries');
-  const docRef = doc(entriesRef);
-  
-  // Get patient profile for patient name
-  const patientProfile = await getPatientProfile(uid);
-  
-  await setDoc(docRef, {
-    ...entry,
-    uid,
-    patientName: patientProfile?.displayName || 'Unknown Patient',
-    patientEmail: patientProfile?.email || '',
-    timestamp: new Date(),
-    id: docRef.id,
-  });
-  
-  return docRef.id;
+  try {
+    const entriesRef = collection(db, 'symptomEntries');
+    const docRef = doc(entriesRef);
+    
+    // Get patient profile for patient name
+    const patientProfile = await getPatientProfile(uid);
+    
+    const entryData = {
+      uid,
+      symptoms: entry.symptoms,
+      age: entry.age || null,
+      gender: entry.gender || null,
+      language: entry.language,
+      triageLevel: entry.triageLevel,
+      triageResult: entry.triageResult,
+      patientName: patientProfile?.displayName || 'Unknown Patient',
+      patientEmail: patientProfile?.email || '',
+      timestamp: new Date(),
+      id: docRef.id,
+    };
+    
+    await setDoc(docRef, entryData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving symptom entry:', error);
+    throw error;
+  }
 };
 
 export const getPatientSymptomHistory = async (uid: string) => {

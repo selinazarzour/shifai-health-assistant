@@ -2,7 +2,7 @@ export type Language = 'en' | 'fr' | 'ar';
 
 export const translations = {
   en: {
-    app_title: "HealthAssist",
+    app_title: "ShifAI",
     app_subtitle: "AI Healthcare Assistant",
     doctor_dashboard: "Doctor Dashboard",
     describe_symptoms: "Describe Your Symptoms",
@@ -46,7 +46,7 @@ export const translations = {
     urgent: "Urgent"
   },
   fr: {
-    app_title: "HealthAssist",
+    app_title: "ShifAI",
     app_subtitle: "Assistant Santé IA",
     doctor_dashboard: "Tableau de Bord Médecin",
     describe_symptoms: "Décrivez Vos Symptômes",
@@ -90,7 +90,7 @@ export const translations = {
     urgent: "Urgent"
   },
   ar: {
-    app_title: "مساعد الصحة",
+    app_title: "شفاء الذكي",
     app_subtitle: "مساعد الرعاية الصحية بالذكاء الاصطناعي",
     doctor_dashboard: "لوحة تحكم الطبيب",
     describe_symptoms: "صف أعراضك",
