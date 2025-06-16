@@ -132,6 +132,22 @@ service cloud.firestore {
     match /symptomEntries/{entryId} {
       allow read: if request.auth != null;
     }
+    
+    // Allow users to manage their own chat messages
+    match /chatMessages/{messageId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+    }
+    
+    // Allow authenticated users (doctors) to read all chat messages and generate reports
+    match /chatMessages/{messageId} {
+      allow read: if request.auth != null;
+    }
+    
+    // Clinical reports - allow creation and reading by authenticated users
+    match /clinicalReports/{reportId} {
+      allow read, write, create: if request.auth != null;
+    }
   }
 }
 ```

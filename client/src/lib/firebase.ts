@@ -406,19 +406,24 @@ export const getClinicalReport = async (patientId: string): Promise<ClinicalRepo
 // Get comprehensive patient data for AI analysis
 export const getPatientDataForAI = async (uid: string) => {
   try {
-    const [profile, symptomEntries, chatHistory] = await Promise.all([
+    const [profile, symptomEntries] = await Promise.all([
       getPatientProfile(uid),
-      getPatientSymptomHistory(uid),
-      getChatHistory(uid)
+      getPatientSymptomHistory(uid)
     ]);
 
+    // Skip chat history to avoid permission issues for now
     return {
       profile,
       entries: symptomEntries,
-      chatHistory: chatHistory.filter(msg => msg.role === 'user').slice(0, 10) // Recent user messages
+      chatHistory: [] // Will be enabled when Firebase rules are updated
     };
   } catch (error) {
     console.error('Error fetching patient data for AI:', error);
-    throw error;
+    // Return minimal data structure to prevent failures
+    return {
+      profile: null,
+      entries: [],
+      chatHistory: []
+    };
   }
 };

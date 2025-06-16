@@ -41,8 +41,10 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
 
     setIsLoadingHistory(true);
     try {
-      const history = await getChatHistory(user.uid);
-      setMessages(history.reverse()); // Reverse to show oldest first
+      // Skip chat history loading for now due to Firebase permissions
+      // const history = await getChatHistory(user.uid);
+      // setMessages(history.reverse());
+      setMessages([]); // Start with empty chat until Firebase rules are updated
     } catch (error) {
       console.error('Error loading chat history:', error);
     } finally {
@@ -67,10 +69,7 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      // Save user message to Firebase
-      await saveChatMessage(userMessage);
-
-      // Get AI response from server
+      // Get AI response from server with profile data
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -78,7 +77,14 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
           message: userMessage.content,
           uid: user.uid,
           language,
-          patientName: profile.displayName || `${profile.firstName} ${profile.lastName}`
+          patientName: profile.displayName || `${profile.firstName} ${profile.lastName}`,
+          profileData: {
+            age: profile.age,
+            gender: profile.gender,
+            medicalConditions: profile.medicalConditions || [],
+            allergies: profile.allergies || [],
+            medications: profile.medications || []
+          }
         })
       });
 
@@ -95,8 +101,7 @@ export function AIChatInterface({ visible }: AIChatInterfaceProps) {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Save assistant message to Firebase
-      await saveChatMessage(assistantMessage);
+      // Skip Firebase saving for now - store in session only until rules are updated
 
     } catch (error) {
       console.error('Error sending message:', error);

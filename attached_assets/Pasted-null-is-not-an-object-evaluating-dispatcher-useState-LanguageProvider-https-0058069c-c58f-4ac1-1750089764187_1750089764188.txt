@@ -1,0 +1,13 @@
+null is not an object (evaluating 'dispatcher.useState')
+LanguageProvider@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/src/hooks/use-language.tsx:23:43
+renderWithHooks@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:11548:35
+mountIndeterminateComponent@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:14926:36
+beginWork$1@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:19753:31
+performUnitOfWork@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:19198:31
+workLoopSync@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:19137:30
+renderRootSync@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:19116:27
+recoverFromConcurrentError@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:18736:42
+performConcurrentWorkOnRoot@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:18684:56
+workLoop@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:197:50
+flushWork@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:176:30
+performWorkUntilDeadline@https://0058069c-c58f-4ac1-9ae6-4aded996bdad-00-22gpjn1nkp72c.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-WERSD76P.js:384:50

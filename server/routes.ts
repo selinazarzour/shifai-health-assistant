@@ -88,15 +88,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     message: z.string().min(1),
     uid: z.string(),
     language: z.string(),
-    patientName: z.string()
+    patientName: z.string(),
+    profileData: z.object({
+      age: z.number().optional(),
+      gender: z.string().optional(),
+      medicalConditions: z.array(z.string()).optional(),
+      allergies: z.array(z.string()).optional(),
+      medications: z.array(z.string()).optional()
+    }).optional()
   });
 
   app.post("/api/chat", async (req, res) => {
     try {
-      const { message, uid, language, patientName } = chatMessageSchema.parse(req.body);
+      const { message, uid, language, patientName, profileData } = chatMessageSchema.parse(req.body);
       
       // Get patient context and history
       const recentSymptoms = await storage.getSymptomEntriesByUser(uid);
+      
+      // Use actual profile data from request
+      const patientProfile = profileData || {
+        name: patientName,
+        age: null,
+        medicalConditions: [],
+        allergies: [],
+        medications: []
+      };
+      
       const context: PatientContext = {
         uid,
         name: patientName,
@@ -108,13 +125,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         language
       };
 
-      // Generate response using local logic with medical disclaimers
-      const response = generateLocalChatResponse(message, context, language);
+      // Generate personalized response with real profile context
+      const response = generateLocalChatResponse(message, context, language, patientProfile);
       
       res.json({ response });
     } catch (error) {
       console.error('Chat API error:', error);
-      res.status(500).json({ error: "Failed to generate response" });
+      
+      // Provide fallback response with proper medical disclaimer
+      const fallbackResponses = {
+        en: `I understand your health concerns. Please consider consulting with a healthcare professional for proper evaluation and guidance.
+
+⚠️ This is AI-generated advice and is not a substitute for medical diagnosis.`,
+        fr: `Je comprends vos préoccupations de santé. Veuillez consulter un professionnel de la santé pour une évaluation et des conseils appropriés.
+
+⚠️ Ceci est un conseil généré par IA et ne remplace pas un diagnostic médical.`,
+        ar: `أفهم مخاوفك الصحية. يرجى استشارة أخصائي الرعاية الصحية للحصول على تقييم وإرشادات مناسبة.
+
+⚠️ هذه نصيحة مولدة بالذكاء الاصطناعي وليست بديلاً عن التشخيص الطبي.`
+      };
+
+      const fallback = fallbackResponses[req.body.language as keyof typeof fallbackResponses] || fallbackResponses.en;
+      res.json({ response: fallback });
     }
   });
 
@@ -138,53 +170,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-// Local response generation with medical guidance
-function generateLocalChatResponse(message: string, context: PatientContext, language: string): string {
+// Enhanced local response generation with profile personalization
+function generateLocalChatResponse(message: string, context: PatientContext, language: string, patientProfile?: any): string {
   const disclaimers = {
     en: "⚠️ This is AI-generated advice and is not a substitute for medical diagnosis.",
     fr: "⚠️ Ceci est un conseil généré par IA et ne remplace pas un diagnostic médical.",
     ar: "⚠️ هذه نصيحة مولدة بالذكاء الاصطناعي وليست بديلاً عن التشخيص الطبي."
   };
 
+  // Personalized greeting based on profile
+  const personalizedGreeting = {
+    en: `Hello ${context.name.split(' ')[0]}, I understand your health concerns.`,
+    fr: `Bonjour ${context.name.split(' ')[0]}, je comprends vos préoccupations de santé.`,
+    ar: `مرحباً ${context.name.split(' ')[0]}، أفهم مخاوفك الصحية.`
+  };
+
+  // Enhanced responses with profile awareness
   const responses = {
     en: {
-      greeting: "I understand your concern about your health.",
+      greeting: personalizedGreeting.en,
       symptoms_reference: context.recentSymptoms.length > 0 
-        ? `Based on your recent symptoms of ${context.recentSymptoms[0].symptoms}, ` 
+        ? `Based on your recent symptoms of "${context.recentSymptoms[0].symptoms}" (${context.recentSymptoms[0].triageLevel} level), ` 
         : "",
+      profile_context: patientProfile ? generateProfileContext(patientProfile, 'en') : "",
       general_advice: "I recommend monitoring your symptoms closely and consulting with a healthcare professional for proper evaluation.",
-      emergency: "If you experience severe symptoms like difficulty breathing, chest pain, or loss of consciousness, seek immediate medical attention."
+      emergency: "If you experience severe symptoms like difficulty breathing, chest pain, or loss of consciousness, seek immediate medical attention.",
+      specific_advice: generateSpecificAdvice(message, context, patientProfile, 'en')
     },
     fr: {
-      greeting: "Je comprends votre préoccupation concernant votre santé.",
+      greeting: personalizedGreeting.fr,
       symptoms_reference: context.recentSymptoms.length > 0 
-        ? `Basé sur vos symptômes récents de ${context.recentSymptoms[0].symptoms}, ` 
+        ? `Basé sur vos symptômes récents de "${context.recentSymptoms[0].symptoms}" (niveau ${context.recentSymptoms[0].triageLevel}), ` 
         : "",
+      profile_context: patientProfile ? generateProfileContext(patientProfile, 'fr') : "",
       general_advice: "Je recommande de surveiller attentivement vos symptômes et de consulter un professionnel de la santé pour une évaluation appropriée.",
-      emergency: "Si vous ressentez des symptômes graves comme une difficulté à respirer, des douleurs thoraciques ou une perte de conscience, consultez immédiatement un médecin."
+      emergency: "Si vous ressentez des symptômes graves comme une difficulté à respirer, des douleurs thoraciques ou une perte de conscience, consultez immédiatement un médecin.",
+      specific_advice: generateSpecificAdvice(message, context, patientProfile, 'fr')
     },
     ar: {
-      greeting: "أفهم قلقك بشأن صحتك.",
+      greeting: personalizedGreeting.ar,
       symptoms_reference: context.recentSymptoms.length > 0 
-        ? `بناءً على أعراضك الأخيرة من ${context.recentSymptoms[0].symptoms}، ` 
+        ? `بناءً على أعراضك الأخيرة "${context.recentSymptoms[0].symptoms}" (مستوى ${context.recentSymptoms[0].triageLevel})، ` 
         : "",
+      profile_context: patientProfile ? generateProfileContext(patientProfile, 'ar') : "",
       general_advice: "أنصح بمراقبة أعراضك عن كثب واستشارة أخصائي الرعاية الصحية للحصول على تقييم مناسب.",
-      emergency: "إذا كنت تعاني من أعراض شديدة مثل صعوبة في التنفس أو ألم في الصدر أو فقدان الوعي، اطلب العناية الطبية الفورية."
+      emergency: "إذا كنت تعاني من أعراض شديدة مثل صعوبة في التنفس أو ألم في الصدر أو فقدان الوعي، اطلب العناية الطبية الفورية.",
+      specific_advice: generateSpecificAdvice(message, context, patientProfile, 'ar')
     }
   };
 
   const lang = language as keyof typeof responses;
   const langResponses = responses[lang] || responses.en;
   
-  let response = langResponses.greeting + " " + langResponses.symptoms_reference + langResponses.general_advice;
+  let response = langResponses.greeting + " " + langResponses.symptoms_reference + langResponses.profile_context + langResponses.specific_advice;
   
   // Add emergency advice for urgent keywords
-  const urgentKeywords = ['chest pain', 'difficulty breathing', 'unconscious', 'severe pain', 'bleeding'];
+  const urgentKeywords = ['chest pain', 'difficulty breathing', 'unconscious', 'severe pain', 'bleeding', 'suicide', 'overdose'];
   if (urgentKeywords.some(keyword => message.toLowerCase().includes(keyword))) {
-    response += " " + langResponses.emergency;
+    response += "\n\n" + langResponses.emergency;
+  } else {
+    response += " " + langResponses.general_advice;
   }
   
   return response + "\n\n" + disclaimers[lang as keyof typeof disclaimers];
+}
+
+// Generate profile-specific context
+function generateProfileContext(profile: any, language: string): string {
+  if (!profile) return "";
+  
+  const contextParts = [];
+  
+  if (profile.age) {
+    const ageContext = {
+      en: `Given your age of ${profile.age}, `,
+      fr: `Étant donné votre âge de ${profile.age} ans, `,
+      ar: `نظراً لعمرك ${profile.age} سنة، `
+    };
+    contextParts.push(ageContext[language as keyof typeof ageContext] || ageContext.en);
+  }
+  
+  if (profile.medicalConditions && profile.medicalConditions.length > 0) {
+    const conditionsContext = {
+      en: `considering your medical history of ${profile.medicalConditions.join(', ')}, `,
+      fr: `en tenant compte de vos antécédents médicaux de ${profile.medicalConditions.join(', ')}, `,
+      ar: `مع الأخذ في الاعتبار تاريخك الطبي من ${profile.medicalConditions.join('، ')}، `
+    };
+    contextParts.push(conditionsContext[language as keyof typeof conditionsContext] || conditionsContext.en);
+  }
+  
+  return contextParts.join('');
+}
+
+// Generate specific advice based on message content and context
+function generateSpecificAdvice(message: string, context: PatientContext, profile: any, language: string): string {
+  const lowerMessage = message.toLowerCase();
+  
+  // Pain-related advice
+  if (lowerMessage.includes('pain') || lowerMessage.includes('hurt') || lowerMessage.includes('ache')) {
+    const painAdvice = {
+      en: "For pain management, consider rest, proper hydration, and gentle movement if tolerated.",
+      fr: "Pour la gestion de la douleur, considérez le repos, une hydratation adéquate et des mouvements doux si tolérés.",
+      ar: "لإدارة الألم، فكر في الراحة والترطيب المناسب والحركة اللطيفة إذا كان ذلك مقبولاً."
+    };
+    return painAdvice[language as keyof typeof painAdvice] || painAdvice.en;
+  }
+  
+  // Fever-related advice
+  if (lowerMessage.includes('fever') || lowerMessage.includes('temperature') || lowerMessage.includes('hot')) {
+    const feverAdvice = {
+      en: "Monitor your temperature regularly, stay hydrated, and rest. Seek medical attention if fever persists or rises above 102°F (39°C).",
+      fr: "Surveillez votre température régulièrement, restez hydraté et reposez-vous. Consultez un médecin si la fièvre persiste ou dépasse 39°C.",
+      ar: "راقب درجة حرارتك بانتظام، واشرب الكثير من السوائل، واحصل على الراحة. اطلب العناية الطبية إذا استمرت الحمى أو ارتفعت فوق 39 درجة مئوية."
+    };
+    return feverAdvice[language as keyof typeof feverAdvice] || feverAdvice.en;
+  }
+  
+  // Stress/anxiety related
+  if (lowerMessage.includes('stress') || lowerMessage.includes('anxiety') || lowerMessage.includes('worried')) {
+    const stressAdvice = {
+      en: "Consider stress management techniques like deep breathing, meditation, or gentle exercise. If anxiety persists, professional support can be very helpful.",
+      fr: "Considérez des techniques de gestion du stress comme la respiration profonde, la méditation ou l'exercice léger. Si l'anxiété persiste, un soutien professionnel peut être très utile.",
+      ar: "فكر في تقنيات إدارة الإجهاد مثل التنفس العميق والتأمل أو التمارين اللطيفة. إذا استمر القلق، يمكن أن يكون الدعم المهني مفيداً جداً."
+    };
+    return stressAdvice[language as keyof typeof stressAdvice] || stressAdvice.en;
+  }
+  
+  // General wellness advice
+  const generalAdvice = {
+    en: "Focus on rest, proper nutrition, and staying hydrated while monitoring your symptoms.",
+    fr: "Concentrez-vous sur le repos, une nutrition appropriée et rester hydraté tout en surveillant vos symptômes.",
+    ar: "ركز على الراحة والتغذية المناسبة والحفاظ على الترطيب أثناء مراقبة أعراضك."
+  };
+  
+  return generalAdvice[language as keyof typeof generalAdvice] || generalAdvice.en;
 }
 
 function generateLocalClinicalReport(entries: any[], patientId: string) {
