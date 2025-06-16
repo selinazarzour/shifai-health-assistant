@@ -1,8 +1,8 @@
-# HealthAssist - AI Healthcare Assistant
+# ShifAI - AI Healthcare Assistant
 
 ## Overview
 
-HealthAssist is a multilingual healthcare triage application that helps patients assess their symptoms and receive preliminary guidance on whether to seek immediate care. The application features an AI-powered symptom analysis system with support for English, French, and Arabic languages, along with a doctor dashboard for monitoring patient entries.
+ShifAI is a multilingual healthcare triage application that helps patients assess their symptoms and receive preliminary guidance on whether to seek immediate care. The application features an AI-powered symptom analysis system with support for English, French, and Arabic languages, along with a doctor dashboard for monitoring patient entries.
 
 ## System Architecture
 
@@ -115,13 +115,18 @@ The application uses Firebase Firestore in production mode. Update security rule
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /patients/{userId} {
+    // Allow users to read and write their own profile in "users" collection
+    match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    
+    // Allow users to manage their own symptom entries
     match /symptomEntries/{entryId} {
       allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
     }
+    
+    // Allow authenticated users to read all symptom entries for doctor dashboard
     match /symptomEntries/{entryId} {
       allow read: if request.auth != null;
     }
