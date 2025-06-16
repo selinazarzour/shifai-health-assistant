@@ -383,14 +383,30 @@ function generateSpecificAdvice(message: string, context: PatientContext, profil
     return stressAdvice[language as keyof typeof stressAdvice] || stressAdvice.en;
   }
   
-  // General wellness advice
-  const generalAdvice = {
-    en: "Focus on rest, proper nutrition, and staying hydrated while monitoring your symptoms.",
-    fr: "Concentrez-vous sur le repos, une nutrition appropriée et rester hydraté tout en surveillant vos symptômes.",
-    ar: "ركز على الراحة والتغذية المناسبة والحفاظ على الترطيب أثناء مراقبة أعراضك."
-  };
+  // Thank you responses
+  if (lowerMessage.includes('thank') || lowerMessage.includes('thanks')) {
+    return language === 'en' ? 
+      `You're welcome! I'm here to help with your health questions anytime.` :
+    language === 'fr' ?
+      `De rien! Je suis là pour vous aider avec vos questions de santé à tout moment.` :
+      `على الرحب والسعة! أنا هنا لمساعدتك في أسئلتك الصحية في أي وقت.`;
+  }
+
+  // General health questions
+  if (lowerMessage.includes('how are you') || lowerMessage.includes('what can you do')) {
+    return language === 'en' ? 
+      `I'm ShifAI, your health assistant. I can help answer health questions, provide guidance based on your symptom history, and suggest when to seek medical care.` :
+    language === 'fr' ?
+      `Je suis ShifAI, votre assistant santé. Je peux aider à répondre aux questions de santé, fournir des conseils basés sur votre historique de symptômes.` :
+      `أنا شفاء الذكي، مساعدك الصحي. يمكنني المساعدة في الإجابة على الأسئلة الصحية وتقديم التوجيه بناءً على تاريخ أعراضك.`;
+  }
   
-  return generalAdvice[language as keyof typeof generalAdvice] || generalAdvice.en;
+  // General fallback for health-related questions
+  return language === 'en' ? 
+    `I understand your concern. For specific health questions, it's always best to consult with a healthcare professional who can properly evaluate your situation.` :
+  language === 'fr' ?
+    `Je comprends votre préoccupation. Pour des questions de santé spécifiques, il est toujours préférable de consulter un professionnel de la santé.` :
+    `أفهم قلقك. للأسئلة الصحية المحددة، من الأفضل دائمًا استشارة أخصائي الرعاية الصحية.`;
 }
 
 function generateEnhancedClinicalReport(patientId: string, patientName: string, patientEmail: string, patientData: any) {
