@@ -30,6 +30,14 @@ export interface PatientContext {
     timestamp: Date;
   }>;
   language: string;
+  profile?: {
+    name: string;
+    age: number | null;
+    gender: string | null;
+    medicalConditions: string[];
+    allergies: string[];
+    medications: string[];
+  };
 }
 
 export interface ClinicalReport {
@@ -48,28 +56,33 @@ function buildChatPrompt(
   chatHistory: ChatMessage[],
 ): string {
   
-  const systemRole = `You are ShifAI, an expert medical AI assistant serving patients in Lebanon and Tunisia. Provide comprehensive healthcare guidance including:
+  const systemRole = `You are ShifAI (شفاء الذكي), an advanced medical AI assistant with complete access to ${context.name}'s medical history and profile. You are like a personal doctor who knows everything about this patient.
 
-MEDICAL EXPERTISE:
-- Specific medication recommendations with dosages
-- Prevention strategies and lifestyle modifications
-- Home remedies and self-care instructions
-- Treatment options and symptom management
-- Clear guidance on when to seek immediate vs routine care
+YOUR MISSION: Answer any medical question with personalized advice based on their complete health data. Provide specific medications, dosages, treatments, and prevention strategies. Be conversational, helpful, and direct like ChatGPT but with medical expertise.
 
-COMMUNICATION STYLE:
-- Be direct, helpful, and conversational like ChatGPT
-- Provide practical medical advice patients need
-- Respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
-- Use patient's name: ${context.name}
+PATIENT PROFILE - ${context.name}:
+${context.profile ? `
+👤 DEMOGRAPHICS: Age ${context.profile.age || 'Unknown'}, Gender ${context.profile.gender || 'Unknown'}
+💊 MEDICATIONS: ${context.profile.medications.length > 0 ? context.profile.medications.join(', ') : 'None reported'}
+🚨 ALLERGIES: ${context.profile.allergies.length > 0 ? context.profile.allergies.join(', ') : 'None reported'}  
+🏥 CONDITIONS: ${context.profile.medicalConditions.length > 0 ? context.profile.medicalConditions.join(', ') : 'None reported'}
+` : ''}
+${context.recentSymptoms.length > 0 ? `🔍 SYMPTOM HISTORY: ${context.recentSymptoms.map((s) => `${s.symptoms} (${s.triageLevel} level, ${s.timestamp.toLocaleDateString()})`).join(' | ')}
+` : ''}
 
-PATIENT CONTEXT:
-${context.recentSymptoms.length > 0 ? `Recent health history: ${context.recentSymptoms.map((s) => `${s.symptoms} (${s.triageLevel} priority, ${s.timestamp.toLocaleDateString()})`).join('; ')}` : 'No recent symptom history available'}
+COMMUNICATION RULES:
+- Answer ANY medical question directly and specifically
+- Use their symptom history to give personalized recommendations  
+- Suggest specific medications with dosages when appropriate
+- Provide prevention strategies tailored to their history
+- Be conversational and helpful like a knowledgeable friend
+- Always respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
+- Reference their past symptoms when relevant for context
 
 RECENT CONVERSATION:
-${chatHistory.slice(-3).map((msg) => `${msg.role === 'user' ? 'Patient' : 'ShifAI'}: ${msg.content}`).join('\n')}
+${chatHistory.slice(-3).map((msg) => `${msg.role === 'user' ? context.name : 'ShifAI'}: ${msg.content}`).join('\n')}
 
-Provide helpful medical guidance with specific actionable advice.`;
+Give comprehensive medical advice based on their complete health profile.`;
 
   return `${systemRole}\n\nUser: ${message}\nAssistant:`;
 }
@@ -140,34 +153,55 @@ export async function generateChatResponse(
   } catch (error) {
     console.error("Error generating chat response:", error);
 
-    // Intelligent fallback based on message content
+    // Intelligent fallback responses using patient history
     const lowerMessage = message.toLowerCase();
     const userName = context.name.split(' ')[0];
     
-    // Provide helpful fallback responses based on message type
+    // Personalized greetings
     if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
+      const recentSymptomContext = context.recentSymptoms.length > 0 ? 
+        ` I see you've been dealing with ${context.recentSymptoms[0].symptoms} recently.` : '';
+      
       const greetings = {
-        en: `Hi ${userName}! I'm ShifAI, your health assistant. How can I help you today?`,
-        fr: `Salut ${userName}! Je suis ShifAI, votre assistant santé. Comment puis-je vous aider?`,
-        ar: `مرحباً ${userName}! أنا شفاء الذكي، مساعدك الصحي. كيف يمكنني مساعدتك؟`
+        en: `Hi ${userName}! I'm ShifAI, your personal health assistant.${recentSymptomContext} What can I help you with today?`,
+        fr: `Salut ${userName}! Je suis ShifAI, votre assistant santé personnel.${recentSymptomContext} Comment puis-je vous aider?`,
+        ar: `مرحباً ${userName}! أنا شفاء الذكي، مساعدك الصحي الشخصي.${recentSymptomContext} كيف يمكنني مساعدتك؟`
       };
       return greetings[context.language as keyof typeof greetings] || greetings.en;
     }
 
+    // Pain management with history context
     if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
+      const hasRecentPain = context.recentSymptoms.some(s => s.symptoms.toLowerCase().includes('pain'));
+      const painContext = hasRecentPain ? ` Given your recent pain history, ` : ` `;
+      
       const painAdvice = {
-        en: `For pain management, try rest, gentle movement, and staying hydrated. Monitor your symptoms and seek medical care if pain is severe or persistent.`,
-        fr: `Pour la gestion de la douleur, essayez le repos, les mouvements doux et restez hydraté. Surveillez vos symptômes et consultez un médecin si la douleur est sévère.`,
-        ar: `لإدارة الألم، جرب الراحة والحركة اللطيفة والترطيب. راقب أعراضك واطلب الرعاية الطبية إذا كان الألم شديدًا أو مستمرًا.`
+        en: `For pain management,${painContext}I recommend starting with ibuprofen 400mg every 6-8 hours with food, or acetaminophen 500mg every 4-6 hours. Apply heat/cold therapy, gentle stretching, and ensure adequate rest. If pain persists beyond 3 days or worsens, consider consulting a doctor.`,
+        fr: `Pour la gestion de la douleur,${painContext}je recommande de commencer par ibuprofène 400mg toutes les 6-8 heures avec de la nourriture, ou paracétamol 500mg toutes les 4-6 heures. Appliquez la thermothérapie, des étirements doux et assurez-vous d'un repos adéquat.`,
+        ar: `لإدارة الألم،${painContext}أنصح بالبدء بإيبوبروفين 400 ملغ كل 6-8 ساعات مع الطعام، أو أسيتامينوفين 500 ملغ كل 4-6 ساعات. اطبق العلاج الحراري والتمدد اللطيف واحصل على راحة كافية.`
       };
       return painAdvice[context.language as keyof typeof painAdvice] || painAdvice.en;
     }
 
-    // General fallback responses
+    // Medication questions
+    if (lowerMessage.includes('medication') || lowerMessage.includes('medicine') || lowerMessage.includes('drug')) {
+      const medAdvice = {
+        en: `${userName}, I can recommend specific medications based on your symptoms. For general wellness, consider: multivitamins, omega-3 supplements, or probiotics. For specific conditions, I can suggest targeted treatments. What specific issue would you like medication advice for?`,
+        fr: `${userName}, je peux recommander des médicaments spécifiques basés sur vos symptômes. Pour le bien-être général, considérez: multivitamines, suppléments d'oméga-3, ou probiotiques. Pour des conditions spécifiques, je peux suggérer des traitements ciblés.`,
+        ar: `${userName}، يمكنني أن أوصي بأدوية محددة بناءً على أعراضك. للعافية العامة، فكر في: الفيتامينات المتعددة، مكملات أوميغا-3، أو البروبيوتيك. للحالات المحددة، يمكنني اقتراح علاجات مستهدفة.`
+      };
+      return medAdvice[context.language as keyof typeof medAdvice] || medAdvice.en;
+    }
+
+    // General health questions with personalized context
+    const hasSymptomHistory = context.recentSymptoms.length > 0;
+    const contextMessage = hasSymptomHistory ? 
+      ` Based on your history of ${context.recentSymptoms.map(s => s.symptoms).join(', ')}, ` : ' ';
+    
     const fallbackResponses = {
-      en: `I understand your concern, ${userName}. For your health questions, I recommend consulting with a healthcare professional who can provide proper evaluation.`,
-      fr: `Je comprends votre préoccupation, ${userName}. Pour vos questions de santé, je recommande de consulter un professionnel de la santé.`,
-      ar: `أفهم قلقك، ${userName}. لأسئلتك الصحية، أنصح باستشارة أخصائي الرعاية الصحية.`
+      en: `${userName}, I'm here to help with any health question you have.${contextMessage}Ask me about medications, treatments, prevention strategies, or any health concern. I have access to your complete medical history to give you personalized advice.`,
+      fr: `${userName}, je suis là pour vous aider avec toute question de santé.${contextMessage}Demandez-moi des médicaments, des traitements, des stratégies de prévention, ou toute préoccupation de santé.`,
+      ar: `${userName}، أنا هنا لمساعدتك في أي سؤال صحي.${contextMessage}اسألني عن الأدوية أو العلاجات أو استراتيجيات الوقاية أو أي مخاوف صحية.`
     };
 
     return fallbackResponses[context.language as keyof typeof fallbackResponses] || fallbackResponses.en;
@@ -229,15 +263,36 @@ function parseReportSections(text: string) {
   const sections: any = {};
   
   // Simple parsing for structured sections
-  const summaryMatch = text.match(/CLINICAL SUMMARY:?\s*(.*?)(?=TIMELINE|$)/s);
-  const timelineMatch = text.match(/TIMELINE ANALYSIS:?\s*(.*?)(?=RISK|$)/s);
-  const riskMatch = text.match(/RISK ASSESSMENT:?\s*(.*?)(?=RECOMMENDATIONS|$)/s);
-  const recommendationsMatch = text.match(/RECOMMENDATIONS:?\s*(.*?)$/s);
-
-  sections.summary = summaryMatch?.[1]?.trim() || "";
-  sections.timeline = timelineMatch?.[1]?.trim() || "";
-  sections.risk = riskMatch?.[1]?.trim() || "";
-  sections.recommendations = recommendationsMatch?.[1]?.trim() || "";
+  const lines = text.split('\n');
+  let currentSection = '';
+  let content = '';
+  
+  for (const line of lines) {
+    if (line.includes('CLINICAL SUMMARY')) {
+      currentSection = 'summary';
+      content = '';
+    } else if (line.includes('TIMELINE ANALYSIS')) {
+      if (currentSection === 'summary') sections.summary = content.trim();
+      currentSection = 'timeline';
+      content = '';
+    } else if (line.includes('RISK ASSESSMENT')) {
+      if (currentSection === 'timeline') sections.timeline = content.trim();
+      currentSection = 'risk';
+      content = '';
+    } else if (line.includes('RECOMMENDATIONS')) {
+      if (currentSection === 'risk') sections.risk = content.trim();
+      currentSection = 'recommendations';
+      content = '';
+    } else {
+      content += line + '\n';
+    }
+  }
+  
+  // Handle the last section
+  if (currentSection === 'recommendations') sections.recommendations = content.trim();
+  else if (currentSection === 'risk') sections.risk = content.trim();
+  else if (currentSection === 'timeline') sections.timeline = content.trim();
+  else if (currentSection === 'summary') sections.summary = content.trim();
 
   return sections;
 }

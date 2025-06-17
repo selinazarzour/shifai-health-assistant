@@ -139,10 +139,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get chat history for context (empty array for now since we're using Firebase on frontend)
       const emptyChatHistory: any[] = [];
       
-      // Generate AI-powered response using open-source model
-      const response = await generateChatResponse(message, context, emptyChatHistory);
+      // Generate AI-powered response using open-source model with full patient data
+      const enhancedContext = {
+        ...context,
+        profile: patientProfile
+      };
       
-      res.json({ response });
+      const response = await generateChatResponse(message, enhancedContext, emptyChatHistory);
+      
+      // Add simple disclaimer for health questions only
+      const lowerMessage = message.toLowerCase();
+      const isHealthQuestion = lowerMessage.includes('pain') || lowerMessage.includes('medication') || 
+                              lowerMessage.includes('treatment') || lowerMessage.includes('symptom') ||
+                              lowerMessage.includes('sick') || lowerMessage.includes('hurt') ||
+                              lowerMessage.includes('doctor') || lowerMessage.includes('medicine');
+      
+      const finalResponse = isHealthQuestion ? 
+        `${response}\n\n💡 This is AI-generated guidance and not a substitute for professional medical diagnosis.` : 
+        response;
+      
+      res.json({ response: finalResponse });
     } catch (error) {
       console.error('Chat API error:', error);
       
