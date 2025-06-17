@@ -3,12 +3,12 @@ import { HfInference } from "@huggingface/inference";
 // Initialize Hugging Face Inference with free tier
 const hf = new HfInference();
 
-// Medical AI Models Configuration - using latest free models
+// Medical AI Models Configuration - using compatible free models
 const MODELS = {
-  // Chat interface - Latest Mistral for better conversations
-  CHAT: "mistralai/Mistral-7B-Instruct-v0.3",
-  // Clinical reports - Mixtral for advanced medical analysis
-  CLINICAL: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+  // Chat interface - Compatible text generation model
+  CHAT: "HuggingFaceH4/zephyr-7b-beta",
+  // Clinical reports - Compatible medical analysis model
+  CLINICAL: "microsoft/BioGPT-Large",
   // Fallback model for chat
   FALLBACK: "microsoft/DialoGPT-medium",
 };
@@ -56,53 +56,112 @@ function buildChatPrompt(
   chatHistory: ChatMessage[],
 ): string {
   
-  // Create a more natural symptom summary for context
-  const formatSymptomHistory = (symptoms: any[]) => {
-    if (symptoms.length === 0) return '';
+  // Intelligent symptom analysis and natural language processing
+  const analyzeSymptomHistory = (symptoms: any[]) => {
+    if (symptoms.length === 0) return { summary: '', fullHistory: '', primarySymptoms: [] };
     
-    const recentSymptom = symptoms[0];
-    const symptomText = recentSymptom.symptoms.toLowerCase();
+    const symptomTypes = new Map();
+    const allSymptoms = [];
     
-    // Parse and clean up symptom descriptions
-    if (symptomText.includes('pain')) {
-      const painAreas = [];
-      if (symptomText.includes('back')) painAreas.push('back pain');
-      if (symptomText.includes('foot')) painAreas.push('foot pain');
-      if (symptomText.includes('head')) painAreas.push('headaches');
-      if (symptomText.includes('stomach')) painAreas.push('stomach discomfort');
+    symptoms.forEach(entry => {
+      const text = entry.symptoms.toLowerCase();
+      allSymptoms.push({ text, level: entry.triageLevel, date: entry.timestamp });
       
-      if (painAreas.length > 0) {
-        return painAreas.length === 1 ? painAreas[0] : `${painAreas.slice(0, -1).join(', ')} and ${painAreas[painAreas.length - 1]}`;
+      // Extract specific symptom types
+      if (text.includes('pain')) {
+        if (text.includes('back')) symptomTypes.set('back pain', (symptomTypes.get('back pain') || 0) + 1);
+        if (text.includes('foot') || text.includes('leg')) symptomTypes.set('lower extremity pain', (symptomTypes.get('lower extremity pain') || 0) + 1);
+        if (text.includes('stomach') || text.includes('abdomen')) symptomTypes.set('abdominal pain', (symptomTypes.get('abdominal pain') || 0) + 1);
+        if (text.includes('head')) symptomTypes.set('headaches', (symptomTypes.get('headaches') || 0) + 1);
       }
+      if (text.includes('focus') || text.includes('concentrat') || text.includes('attention')) {
+        symptomTypes.set('concentration difficulties', (symptomTypes.get('concentration difficulties') || 0) + 1);
+      }
+      if (text.includes('eye') && text.includes('burn')) {
+        symptomTypes.set('eye strain', (symptomTypes.get('eye strain') || 0) + 1);
+      }
+      if (text.includes('nausea') || text.includes('sick')) {
+        symptomTypes.set('nausea', (symptomTypes.get('nausea') || 0) + 1);
+      }
+      if (text.includes('numb')) {
+        symptomTypes.set('numbness', (symptomTypes.get('numbness') || 0) + 1);
+      }
+    });
+    
+    // Create natural summary
+    const primarySymptoms = Array.from(symptomTypes.entries())
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([symptom]) => symptom);
+    
+    let summary = '';
+    if (primarySymptoms.length === 1) {
+      summary = primarySymptoms[0];
+    } else if (primarySymptoms.length === 2) {
+      summary = `${primarySymptoms[0]} and ${primarySymptoms[1]}`;
+    } else if (primarySymptoms.length >= 3) {
+      summary = `${primarySymptoms[0]}, ${primarySymptoms[1]}, and ${primarySymptoms[2]}`;
     }
     
-    // Default to simplified version of original text
-    return recentSymptom.symptoms.substring(0, 50) + (recentSymptom.symptoms.length > 50 ? '...' : '');
+    // Create detailed history for AI context
+    const recentSymptoms = symptoms.slice(0, 3).map(s => {
+      const text = s.symptoms.toLowerCase();
+      let cleanDescription = '';
+      
+      if (text.includes('focus') || text.includes('concentrat')) {
+        cleanDescription = 'difficulty concentrating';
+      } else if (text.includes('back') && text.includes('pain')) {
+        cleanDescription = 'back pain';
+      } else if (text.includes('foot') && text.includes('pain')) {
+        cleanDescription = 'foot pain';
+      } else if (text.includes('stomach') && text.includes('pain')) {
+        cleanDescription = 'stomach pain';
+      } else if (text.includes('eye') && text.includes('burn')) {
+        cleanDescription = 'eye strain/burning';
+      } else if (text.includes('head')) {
+        cleanDescription = 'headache';
+      } else {
+        // Simplify complex descriptions
+        cleanDescription = text.length > 30 ? 'multiple symptoms' : text;
+      }
+      
+      return { description: cleanDescription, level: s.triageLevel };
+    });
+    
+    return { 
+      summary, 
+      fullHistory: recentSymptoms.map(s => `${s.description} (${s.level})`).join(', '),
+      primarySymptoms,
+      recentSymptoms
+    };
   };
 
-  const symptomSummary = formatSymptomHistory(context.recentSymptoms);
+  const symptomAnalysis = analyzeSymptomHistory(context.recentSymptoms);
 
-  const systemRole = `You are ShifAI, an expert medical AI with complete access to ${context.name}'s health profile. Provide personalized medical advice like a knowledgeable physician.
+  const systemRole = `You are ShifAI, an expert medical AI with complete access to ${context.name}'s health profile and symptom history. You understand their medical context without needing to ask.
 
-PATIENT: ${context.name}
-${context.profile ? `AGE: ${context.profile.age || 'Unknown'} | GENDER: ${context.profile.gender || 'Unknown'}
-CURRENT MEDICATIONS: ${context.profile.medications.length > 0 ? context.profile.medications.join(', ') : 'None'}
-ALLERGIES: ${context.profile.allergies.length > 0 ? context.profile.allergies.join(', ') : 'None'}
-MEDICAL CONDITIONS: ${context.profile.medicalConditions.length > 0 ? context.profile.medicalConditions.join(', ') : 'None'}` : ''}
-${symptomSummary ? `RECENT HEALTH CONCERNS: Patient has been experiencing ${symptomSummary} (${context.recentSymptoms[0].triageLevel} priority)` : 'No recent symptoms reported'}
+PATIENT PROFILE: ${context.name}
+${context.profile ? `Age: ${context.profile.age || 'Unknown'} | Gender: ${context.profile.gender || 'Unknown'}
+Current Medications: ${context.profile.medications.length > 0 ? context.profile.medications.join(', ') : 'None'}
+Allergies: ${context.profile.allergies.length > 0 ? context.profile.allergies.join(', ') : 'None'}
+Medical Conditions: ${context.profile.medicalConditions.length > 0 ? context.profile.medicalConditions.join(', ') : 'None'}` : ''}
 
-INSTRUCTIONS:
-1. Provide specific medication recommendations with exact dosages for their symptoms
-2. Explain WHY you recommend each medication for which specific symptom
-3. Consider their allergies and current medications for safety
-4. Give personalized advice based on their age, gender, and medical history
-5. Be direct and conversational - like a trusted doctor who knows them well
-6. Always specify what each treatment targets (e.g., "Ibuprofen 400mg for your back pain")
-7. Respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
+ANALYZED SYMPTOM HISTORY:
+${symptomAnalysis.summary ? `Primary Concerns: ${symptomAnalysis.summary}
+Recent Episodes: ${symptomAnalysis.fullHistory}` : 'No recent symptoms reported'}
 
-${chatHistory.length > 0 ? `RECENT CONVERSATION:\n${chatHistory.slice(-2).map((msg) => `${msg.role === 'user' ? context.name : 'Dr. ShifAI'}: ${msg.content}`).join('\n')}` : ''}
+KEY INSTRUCTIONS:
+- When user asks about specific symptoms (like "focusing" or "pain"), reference their relevant symptom history
+- Provide specific medications with dosages and explain what each treats
+- Be conversational and direct - you already know their medical background
+- Consider their allergies and current medications for safety
+- If they mention a symptom they previously reported, acknowledge the connection
+- Always explain WHY you recommend specific treatments
+- Respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
 
-Provide comprehensive, personalized medical guidance.`;
+${chatHistory.length > 0 ? `Previous conversation context:\n${chatHistory.slice(-2).map((msg) => `${msg.role === 'user' ? context.name : 'ShifAI'}: ${msg.content}`).join('\n')}` : ''}
+
+Provide knowledgeable medical guidance based on their complete health profile.`;
 
   return `${systemRole}\n\nUser: ${message}\nAssistant:`;
 }
@@ -189,28 +248,24 @@ export async function generateChatResponse(
     const lowerMessage = message.toLowerCase();
     const userName = context.name.split(' ')[0];
     
-    // Personalized greetings with natural symptom context
+    // Dynamic greetings using intelligent symptom analysis
     if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
+      // Inline symptom analysis for fallback
+      const getSymptomSummary = (symptoms: any[]) => {
+        if (symptoms.length === 0) return '';
+        const text = symptoms[0].symptoms.toLowerCase();
+        if (text.includes('focus') || text.includes('concentrat')) return 'concentration difficulties';
+        if (text.includes('back') && text.includes('pain')) return 'back pain';
+        if (text.includes('foot') && text.includes('pain')) return 'foot pain';
+        if (text.includes('eye') && text.includes('burn')) return 'eye strain';
+        return 'some health concerns';
+      };
+      
+      const symptomSummary = getSymptomSummary(context.recentSymptoms);
       let symptomContext = '';
       
-      if (context.recentSymptoms.length > 0) {
-        const symptomText = context.recentSymptoms[0].symptoms.toLowerCase();
-        
-        // Create natural language summary
-        if (symptomText.includes('pain') && symptomText.includes('back')) {
-          symptomContext = ` I see you've been experiencing back pain recently.`;
-        } else if (symptomText.includes('pain') && symptomText.includes('foot')) {
-          symptomContext = ` I see you've been dealing with foot pain lately.`;
-        } else if (symptomText.includes('headache') || symptomText.includes('head')) {
-          symptomContext = ` I notice you've been having headaches.`;
-        } else if (symptomText.includes('stomach') || symptomText.includes('nausea')) {
-          symptomContext = ` I see you've been experiencing stomach issues.`;
-        } else {
-          // Generic but cleaner version
-          const cleanSymptom = context.recentSymptoms[0].symptoms.length > 40 ? 
-            'some health concerns' : context.recentSymptoms[0].symptoms.toLowerCase();
-          symptomContext = ` I see you've been dealing with ${cleanSymptom}.`;
-        }
+      if (symptomSummary) {
+        symptomContext = ` I see you've been experiencing ${symptomSummary} recently.`;
       }
       
       const greetings = {
@@ -244,15 +299,38 @@ export async function generateChatResponse(
       return medAdvice[context.language as keyof typeof medAdvice] || medAdvice.en;
     }
 
-    // General health questions with personalized context
-    const hasSymptomHistory = context.recentSymptoms.length > 0;
-    const contextMessage = hasSymptomHistory ? 
-      ` Based on your history of ${context.recentSymptoms.map(s => s.symptoms).join(', ')}, ` : ' ';
+    // Handle specific symptom questions with context
+    if (lowerMessage.includes('focus') || lowerMessage.includes('concentrat') || lowerMessage.includes('attention')) {
+      const hasFocusIssues = context.recentSymptoms.some(s => 
+        s.symptoms.toLowerCase().includes('focus') || 
+        s.symptoms.toLowerCase().includes('concentrat') ||
+        s.symptoms.toLowerCase().includes('attention')
+      );
+      
+      if (hasFocusIssues) {
+        const focusAdvice = {
+          en: `For your concentration difficulties, I recommend: 1) Take regular breaks (20-20-20 rule: every 20 minutes, look at something 20 feet away for 20 seconds), 2) Consider magnesium supplements 200-400mg daily for focus, 3) Reduce screen time and blue light exposure, 4) Try ginkgo biloba 120mg twice daily for cognitive function. Given your recent eye strain symptoms, this combination should help improve both focus and eye comfort.`,
+          fr: `Pour vos difficultés de concentration, je recommande: 1) Prenez des pauses régulières, 2) Considérez les suppléments de magnésium 200-400mg par jour, 3) Réduisez le temps d'écran, 4) Essayez le ginkgo biloba 120mg deux fois par jour.`,
+          ar: `لصعوبات التركيز، أنصح بـ: 1) خذ فترات راحة منتظمة، 2) فكر في مكملات المغنيسيوم 200-400 ملغ يومياً، 3) قلل وقت الشاشة، 4) جرب الجنكة 120 ملغ مرتين يومياً.`
+        };
+        return focusAdvice[context.language as keyof typeof focusAdvice] || focusAdvice.en;
+      }
+    }
+    
+    // General intelligent fallback with clean symptom context
+    const hasRecentSymptoms = context.recentSymptoms.length > 0;
+    let contextMessage = '';
+    if (hasRecentSymptoms) {
+      const mainSymptom = context.recentSymptoms[0].symptoms.toLowerCase();
+      if (mainSymptom.includes('focus')) contextMessage = ` Given your recent concentration difficulties, `;
+      else if (mainSymptom.includes('pain')) contextMessage = ` Given your recent pain concerns, `;
+      else contextMessage = ` Given your recent health concerns, `;
+    }
     
     const fallbackResponses = {
-      en: `${userName}, I'm here to help with any health question you have.${contextMessage}Ask me about medications, treatments, prevention strategies, or any health concern. I have access to your complete medical history to give you personalized advice.`,
-      fr: `${userName}, je suis là pour vous aider avec toute question de santé.${contextMessage}Demandez-moi des médicaments, des traitements, des stratégies de prévention, ou toute préoccupation de santé.`,
-      ar: `${userName}، أنا هنا لمساعدتك في أي سؤال صحي.${contextMessage}اسألني عن الأدوية أو العلاجات أو استراتيجيات الوقاية أو أي مخاوف صحية.`
+      en: `${userName}, I'm here to help with any health question.${contextMessage}I can recommend specific medications, treatments, and prevention strategies based on your complete medical history.`,
+      fr: `${userName}, je suis là pour vous aider avec toute question de santé.${contextMessage}Je peux recommander des médicaments, traitements et stratégies spécifiques.`,
+      ar: `${userName}، أنا هنا لمساعدتك في أي سؤال صحي.${contextMessage}يمكنني أن أوصي بأدوية وعلاجات واستراتيجيات محددة.`
     };
 
     return fallbackResponses[context.language as keyof typeof fallbackResponses] || fallbackResponses.en;
