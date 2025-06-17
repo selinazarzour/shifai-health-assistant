@@ -136,8 +136,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         language
       };
 
-      // Generate personalized response with real profile context
-      const response = generateLocalChatResponse(message, context, language, patientProfile);
+      // Get chat history for context (empty array for now since we're using Firebase on frontend)
+      const emptyChatHistory: any[] = [];
+      
+      // Generate AI-powered response using open-source model
+      const response = await generateChatResponse(message, context, emptyChatHistory);
       
       res.json({ response });
     } catch (error) {
@@ -167,8 +170,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { patientId } = req.params;
       const { patientName, patientEmail, patientData } = req.body;
       
-      // Generate report with real Firebase data
-      const report = generateEnhancedClinicalReport(patientId, patientName, patientEmail, patientData);
+      // Generate AI-powered clinical report
+      const report = await generateClinicalReport(patientData);
       
       res.json(report);
     } catch (error) {

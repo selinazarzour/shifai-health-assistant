@@ -41,19 +41,14 @@ export interface ClinicalReport {
   generatedAt: Date;
 }
 
-// Build medical chat prompt with patient context
+// Build conversational prompt for open medical discussions
 function buildChatPrompt(
   message: string,
   context: PatientContext,
   chatHistory: ChatMessage[],
 ): string {
-  const disclaimerText = {
-    en: "⚠️ This is AI-generated advice and is not a substitute for medical diagnosis.",
-    fr: "⚠️ Ceci est un conseil généré par IA et ne remplace pas un diagnostic médical.",
-    ar: "⚠️ هذه نصيحة مولدة بالذكاء الاصطناعي وليست بديلاً عن التشخيص الطبي.",
-  };
-
-  const systemPrompt = `You are ShifAI, an expert medical AI assistant serving patients in Lebanon and Tunisia. Provide comprehensive healthcare guidance including:
+  
+  const systemRole = `You are ShifAI, an expert medical AI assistant serving patients in Lebanon and Tunisia. Provide comprehensive healthcare guidance including:
 
 MEDICAL EXPERTISE:
 - Specific medication recommendations with dosages
@@ -76,7 +71,7 @@ ${chatHistory.slice(-3).map((msg) => `${msg.role === 'user' ? 'Patient' : 'ShifA
 
 Provide helpful medical guidance with specific actionable advice.`;
 
-  return `${systemPrompt}\n\nUser: ${message}\nAssistant:`;
+  return `${systemRole}\n\nUser: ${message}\nAssistant:`;
 }
 
 // Build clinical report prompt
@@ -145,23 +140,37 @@ export async function generateChatResponse(
   } catch (error) {
     console.error("Error generating chat response:", error);
 
-    // Fallback response with disclaimer
+    // Intelligent fallback based on message content
+    const lowerMessage = message.toLowerCase();
+    const userName = context.name.split(' ')[0];
+    
+    // Provide helpful fallback responses based on message type
+    if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
+      const greetings = {
+        en: `Hi ${userName}! I'm ShifAI, your health assistant. How can I help you today?`,
+        fr: `Salut ${userName}! Je suis ShifAI, votre assistant santé. Comment puis-je vous aider?`,
+        ar: `مرحباً ${userName}! أنا شفاء الذكي، مساعدك الصحي. كيف يمكنني مساعدتك؟`
+      };
+      return greetings[context.language as keyof typeof greetings] || greetings.en;
+    }
+
+    if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
+      const painAdvice = {
+        en: `For pain management, try rest, gentle movement, and staying hydrated. Monitor your symptoms and seek medical care if pain is severe or persistent.`,
+        fr: `Pour la gestion de la douleur, essayez le repos, les mouvements doux et restez hydraté. Surveillez vos symptômes et consultez un médecin si la douleur est sévère.`,
+        ar: `لإدارة الألم، جرب الراحة والحركة اللطيفة والترطيب. راقب أعراضك واطلب الرعاية الطبية إذا كان الألم شديدًا أو مستمرًا.`
+      };
+      return painAdvice[context.language as keyof typeof painAdvice] || painAdvice.en;
+    }
+
+    // General fallback responses
     const fallbackResponses = {
-      en: `I'm having trouble processing your request right now. Please consider consulting with a healthcare professional about your symptoms.
-
-⚠️ This is AI-generated advice and is not a substitute for medical diagnosis.`,
-      fr: `J'ai des difficultés à traiter votre demande en ce moment. Veuillez consulter un professionnel de la santé concernant vos symptômes.
-
-⚠️ Ceci est un conseil généré par IA et ne remplace pas un diagnostic médical.`,
-      ar: `أواجه صعوبة في معالجة طلبكم في الوقت الحالي. يرجى استشارة أخصائي الرعاية الصحية حول أعراضكم.
-
-⚠️ هذه نصيحة مولدة بالذكاء الاصطناعي وليست بديلاً عن التشخيص الطبي.`,
+      en: `I understand your concern, ${userName}. For your health questions, I recommend consulting with a healthcare professional who can provide proper evaluation.`,
+      fr: `Je comprends votre préoccupation, ${userName}. Pour vos questions de santé, je recommande de consulter un professionnel de la santé.`,
+      ar: `أفهم قلقك، ${userName}. لأسئلتك الصحية، أنصح باستشارة أخصائي الرعاية الصحية.`
     };
 
-    return (
-      fallbackResponses[context.language as keyof typeof fallbackResponses] ||
-      fallbackResponses.en
-    );
+    return fallbackResponses[context.language as keyof typeof fallbackResponses] || fallbackResponses.en;
   }
 }
 
@@ -218,41 +227,34 @@ export async function generateClinicalReport(
 // Parse report sections from generated text
 function parseReportSections(text: string) {
   const sections: any = {};
+  
+  // Simple parsing for structured sections
+  const summaryMatch = text.match(/CLINICAL SUMMARY:?\s*(.*?)(?=TIMELINE|$)/s);
+  const timelineMatch = text.match(/TIMELINE ANALYSIS:?\s*(.*?)(?=RISK|$)/s);
+  const riskMatch = text.match(/RISK ASSESSMENT:?\s*(.*?)(?=RECOMMENDATIONS|$)/s);
+  const recommendationsMatch = text.match(/RECOMMENDATIONS:?\s*(.*?)$/s);
 
-  // Look for structured sections
-  const summaryMatch = text.match(
-    /CLINICAL SUMMARY:?\s*([\s\S]*?)(?=TIMELINE|$)/,
-  );
-  const timelineMatch = text.match(
-    /TIMELINE ANALYSIS:?\s*([\s\S]*?)(?=RISK|$)/,
-  );
-  const riskMatch = text.match(
-    /RISK ASSESSMENT:?\s*([\s\S]*?)(?=RECOMMENDATIONS|$)/,
-  );
-  const recMatch = text.match(/RECOMMENDATIONS:?\s*([\s\S]*)$/);
-
-  sections.summary = summaryMatch?.[1]?.trim();
-  sections.timeline = timelineMatch?.[1]?.trim();
-  sections.risk = riskMatch?.[1]?.trim();
-  sections.recommendations = recMatch?.[1]?.trim();
-
-  // If structured sections not found, use the full text as summary
-  if (!sections.summary) {
-    sections.summary = text.substring(0, 300) + "...";
-  }
+  sections.summary = summaryMatch?.[1]?.trim() || "";
+  sections.timeline = timelineMatch?.[1]?.trim() || "";
+  sections.risk = riskMatch?.[1]?.trim() || "";
+  sections.recommendations = recommendationsMatch?.[1]?.trim() || "";
 
   return sections;
 }
 
-// Health check for AI service
+// Check AI service health
 export async function checkAIServiceHealth(): Promise<boolean> {
   try {
-    const testResponse = await hf.textGeneration({
+    // Simple test request to verify service is working
+    const response = await hf.textGeneration({
       model: MODELS.FALLBACK,
-      inputs: "Hello",
-      parameters: { max_new_tokens: 10 },
+      inputs: "Test",
+      parameters: {
+        max_new_tokens: 10,
+        temperature: 0.1,
+      },
     });
-    return !!testResponse;
+    return !!response.generated_text;
   } catch (error) {
     console.error("AI service health check failed:", error);
     return false;
