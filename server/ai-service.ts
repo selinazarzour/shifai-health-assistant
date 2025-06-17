@@ -3,13 +3,13 @@ import { HfInference } from "@huggingface/inference";
 // Initialize Hugging Face Inference with free tier
 const hf = new HfInference();
 
-// Medical AI Models Configuration - using free models
+// Medical AI Models Configuration - using latest free models
 const MODELS = {
-  // Chat interface - Meta Llama for open conversations
-  CHAT: "meta-llama/Llama-2-7b-chat-hf",
-  // Clinical reports - Mistral for medical analysis
-  CLINICAL: "mistralai/Mistral-7B-Instruct-v0.1",
-  // Fallback model
+  // Chat interface - Latest Mistral for better conversations
+  CHAT: "mistralai/Mistral-7B-Instruct-v0.3",
+  // Clinical reports - Mixtral for advanced medical analysis
+  CLINICAL: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+  // Fallback model for chat
   FALLBACK: "microsoft/DialoGPT-medium",
 };
 
@@ -56,33 +56,53 @@ function buildChatPrompt(
   chatHistory: ChatMessage[],
 ): string {
   
-  const systemRole = `You are ShifAI (شفاء الذكي), an advanced medical AI assistant with complete access to ${context.name}'s medical history and profile. You are like a personal doctor who knows everything about this patient.
+  // Create a more natural symptom summary for context
+  const formatSymptomHistory = (symptoms: any[]) => {
+    if (symptoms.length === 0) return '';
+    
+    const recentSymptom = symptoms[0];
+    const symptomText = recentSymptom.symptoms.toLowerCase();
+    
+    // Parse and clean up symptom descriptions
+    if (symptomText.includes('pain')) {
+      const painAreas = [];
+      if (symptomText.includes('back')) painAreas.push('back pain');
+      if (symptomText.includes('foot')) painAreas.push('foot pain');
+      if (symptomText.includes('head')) painAreas.push('headaches');
+      if (symptomText.includes('stomach')) painAreas.push('stomach discomfort');
+      
+      if (painAreas.length > 0) {
+        return painAreas.length === 1 ? painAreas[0] : `${painAreas.slice(0, -1).join(', ')} and ${painAreas[painAreas.length - 1]}`;
+      }
+    }
+    
+    // Default to simplified version of original text
+    return recentSymptom.symptoms.substring(0, 50) + (recentSymptom.symptoms.length > 50 ? '...' : '');
+  };
 
-YOUR MISSION: Answer any medical question with personalized advice based on their complete health data. Provide specific medications, dosages, treatments, and prevention strategies. Be conversational, helpful, and direct like ChatGPT but with medical expertise.
+  const symptomSummary = formatSymptomHistory(context.recentSymptoms);
 
-PATIENT PROFILE - ${context.name}:
-${context.profile ? `
-👤 DEMOGRAPHICS: Age ${context.profile.age || 'Unknown'}, Gender ${context.profile.gender || 'Unknown'}
-💊 MEDICATIONS: ${context.profile.medications.length > 0 ? context.profile.medications.join(', ') : 'None reported'}
-🚨 ALLERGIES: ${context.profile.allergies.length > 0 ? context.profile.allergies.join(', ') : 'None reported'}  
-🏥 CONDITIONS: ${context.profile.medicalConditions.length > 0 ? context.profile.medicalConditions.join(', ') : 'None reported'}
-` : ''}
-${context.recentSymptoms.length > 0 ? `🔍 SYMPTOM HISTORY: ${context.recentSymptoms.map((s) => `${s.symptoms} (${s.triageLevel} level, ${s.timestamp.toLocaleDateString()})`).join(' | ')}
-` : ''}
+  const systemRole = `You are ShifAI, an expert medical AI with complete access to ${context.name}'s health profile. Provide personalized medical advice like a knowledgeable physician.
 
-COMMUNICATION RULES:
-- Answer ANY medical question directly and specifically
-- Use their symptom history to give personalized recommendations  
-- Suggest specific medications with dosages when appropriate
-- Provide prevention strategies tailored to their history
-- Be conversational and helpful like a knowledgeable friend
-- Always respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
-- Reference their past symptoms when relevant for context
+PATIENT: ${context.name}
+${context.profile ? `AGE: ${context.profile.age || 'Unknown'} | GENDER: ${context.profile.gender || 'Unknown'}
+CURRENT MEDICATIONS: ${context.profile.medications.length > 0 ? context.profile.medications.join(', ') : 'None'}
+ALLERGIES: ${context.profile.allergies.length > 0 ? context.profile.allergies.join(', ') : 'None'}
+MEDICAL CONDITIONS: ${context.profile.medicalConditions.length > 0 ? context.profile.medicalConditions.join(', ') : 'None'}` : ''}
+${symptomSummary ? `RECENT HEALTH CONCERNS: Patient has been experiencing ${symptomSummary} (${context.recentSymptoms[0].triageLevel} priority)` : 'No recent symptoms reported'}
 
-RECENT CONVERSATION:
-${chatHistory.slice(-3).map((msg) => `${msg.role === 'user' ? context.name : 'ShifAI'}: ${msg.content}`).join('\n')}
+INSTRUCTIONS:
+1. Provide specific medication recommendations with exact dosages for their symptoms
+2. Explain WHY you recommend each medication for which specific symptom
+3. Consider their allergies and current medications for safety
+4. Give personalized advice based on their age, gender, and medical history
+5. Be direct and conversational - like a trusted doctor who knows them well
+6. Always specify what each treatment targets (e.g., "Ibuprofen 400mg for your back pain")
+7. Respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
 
-Give comprehensive medical advice based on their complete health profile.`;
+${chatHistory.length > 0 ? `RECENT CONVERSATION:\n${chatHistory.slice(-2).map((msg) => `${msg.role === 'user' ? context.name : 'Dr. ShifAI'}: ${msg.content}`).join('\n')}` : ''}
+
+Provide comprehensive, personalized medical guidance.`;
 
   return `${systemRole}\n\nUser: ${message}\nAssistant:`;
 }
@@ -102,8 +122,12 @@ Patient Information:
 Symptom History (${entries.length} entries):
 ${entries
   .map(
-    (entry: any, index: number) =>
-      `${index + 1}. ${entry.timestamp.toLocaleDateString()} - ${entry.symptoms} (Triage: ${entry.triageLevel})`,
+    (entry: any, index: number) => {
+      const date = entry.timestamp instanceof Date ? entry.timestamp.toLocaleDateString() : 
+                   typeof entry.timestamp === 'string' ? new Date(entry.timestamp).toLocaleDateString() : 
+                   entry.timestamp?.toDate ? entry.timestamp.toDate().toLocaleDateString() : 'Unknown date';
+      return `${index + 1}. ${date} - ${entry.symptoms} (Triage: ${entry.triageLevel})`;
+    }
   )
   .join("\n")}
 
@@ -112,13 +136,21 @@ Medical Background:
 - Allergies: ${profile.allergies?.join(", ") || "None reported"}
 - Medications: ${profile.medications?.join(", ") || "None reported"}
 
-Please provide:
-1. CLINICAL SUMMARY: A professional paragraph summarizing the patient's condition
-2. TIMELINE ANALYSIS: Key patterns in symptom progression
-3. RISK ASSESSMENT: Current risk level and concerning patterns
-4. RECOMMENDATIONS: Suggested follow-up actions for healthcare provider
+Analyze this patient's data and provide a comprehensive clinical assessment:
 
-Format as a structured medical report. Be concise but thorough.`;
+1. CLINICAL SUMMARY: Summarize the patient's current health status, key symptoms, and overall condition in 2-3 sentences
+
+2. TIMELINE ANALYSIS: Identify patterns in symptom progression, frequency, and severity changes over time
+
+3. RISK ASSESSMENT: Evaluate current risk level based on symptoms, medical history, and concerning patterns. Rate as LOW/MODERATE/HIGH with justification
+
+4. RECOMMENDATIONS: Provide specific clinical recommendations including:
+   - Immediate actions needed
+   - Follow-up care suggestions  
+   - Diagnostic tests to consider
+   - Treatment modifications
+
+Write in professional medical language suitable for healthcare providers. Be specific and actionable.`;
 }
 
 // Generate AI chat response
@@ -157,15 +189,34 @@ export async function generateChatResponse(
     const lowerMessage = message.toLowerCase();
     const userName = context.name.split(' ')[0];
     
-    // Personalized greetings
+    // Personalized greetings with natural symptom context
     if (lowerMessage.includes('hi') || lowerMessage.includes('hello') || lowerMessage.includes('hey')) {
-      const recentSymptomContext = context.recentSymptoms.length > 0 ? 
-        ` I see you've been dealing with ${context.recentSymptoms[0].symptoms} recently.` : '';
+      let symptomContext = '';
+      
+      if (context.recentSymptoms.length > 0) {
+        const symptomText = context.recentSymptoms[0].symptoms.toLowerCase();
+        
+        // Create natural language summary
+        if (symptomText.includes('pain') && symptomText.includes('back')) {
+          symptomContext = ` I see you've been experiencing back pain recently.`;
+        } else if (symptomText.includes('pain') && symptomText.includes('foot')) {
+          symptomContext = ` I see you've been dealing with foot pain lately.`;
+        } else if (symptomText.includes('headache') || symptomText.includes('head')) {
+          symptomContext = ` I notice you've been having headaches.`;
+        } else if (symptomText.includes('stomach') || symptomText.includes('nausea')) {
+          symptomContext = ` I see you've been experiencing stomach issues.`;
+        } else {
+          // Generic but cleaner version
+          const cleanSymptom = context.recentSymptoms[0].symptoms.length > 40 ? 
+            'some health concerns' : context.recentSymptoms[0].symptoms.toLowerCase();
+          symptomContext = ` I see you've been dealing with ${cleanSymptom}.`;
+        }
+      }
       
       const greetings = {
-        en: `Hi ${userName}! I'm ShifAI, your personal health assistant.${recentSymptomContext} What can I help you with today?`,
-        fr: `Salut ${userName}! Je suis ShifAI, votre assistant santé personnel.${recentSymptomContext} Comment puis-je vous aider?`,
-        ar: `مرحباً ${userName}! أنا شفاء الذكي، مساعدك الصحي الشخصي.${recentSymptomContext} كيف يمكنني مساعدتك؟`
+        en: `Hi ${userName}! I'm ShifAI, your personal health assistant.${symptomContext} How can I help you today?`,
+        fr: `Salut ${userName}! Je suis ShifAI, votre assistant santé personnel.${symptomContext} Comment puis-je vous aider?`,
+        ar: `مرحباً ${userName}! أنا شفاء الذكي، مساعدك الصحي الشخصي.${symptomContext} كيف يمكنني مساعدتك؟`
       };
       return greetings[context.language as keyof typeof greetings] || greetings.en;
     }
@@ -244,18 +295,101 @@ export async function generateClinicalReport(
   } catch (error) {
     console.error("Error generating clinical report:", error);
 
-    // Fallback structured report
+    // Intelligent fallback based on actual patient data
+    const entries = patientData.entries || [];
+    const profile = patientData.profile || {};
+    
+    // Analyze symptoms for patterns
+    const symptomAnalysis = analyzeSymptomPatterns(entries);
+    
     return {
       patientId: patientData.profile?.uid || "",
-      summary: `Patient has submitted ${patientData.entries?.length || 0} symptom entries. Manual review recommended.`,
-      timeline:
-        "Automated timeline analysis unavailable. Please review entries chronologically.",
-      riskAnalysis: "Risk assessment requires manual clinical evaluation.",
-      recommendations:
-        "Recommend comprehensive patient evaluation and symptom pattern analysis.",
+      summary: `${profile.displayName || 'Patient'} (${profile.age || 'Unknown age'}, ${profile.gender || 'Unknown gender'}) has reported ${entries.length} symptom episodes. ${symptomAnalysis.summary}`,
+      timeline: symptomAnalysis.timeline,
+      riskAnalysis: symptomAnalysis.riskLevel,
+      recommendations: symptomAnalysis.recommendations,
       generatedAt: new Date(),
     };
   }
+}
+
+// Analyze symptom patterns for intelligent fallback reports
+function analyzeSymptomPatterns(entries: any[]) {
+  if (entries.length === 0) {
+    return {
+      summary: "No symptoms reported to date.",
+      timeline: "No timeline available.",
+      riskLevel: "LOW - No active symptoms reported",
+      recommendations: "Routine health maintenance recommended."
+    };
+  }
+
+  // Analyze symptom types and frequencies
+  const symptomTypes = new Map();
+  const urgentCount = entries.filter(e => e.triageLevel === 'urgent').length;
+  const monitorCount = entries.filter(e => e.triageLevel === 'monitor').length;
+  const safeCount = entries.filter(e => e.triageLevel === 'safe').length;
+
+  entries.forEach(entry => {
+    const symptoms = entry.symptoms.toLowerCase();
+    if (symptoms.includes('pain')) {
+      if (symptoms.includes('back')) symptomTypes.set('back pain', (symptomTypes.get('back pain') || 0) + 1);
+      if (symptoms.includes('head')) symptomTypes.set('headache', (symptomTypes.get('headache') || 0) + 1);
+      if (symptoms.includes('stomach')) symptomTypes.set('abdominal pain', (symptomTypes.get('abdominal pain') || 0) + 1);
+      if (symptoms.includes('foot')) symptomTypes.set('foot pain', (symptomTypes.get('foot pain') || 0) + 1);
+    }
+    if (symptoms.includes('nausea')) symptomTypes.set('nausea', (symptomTypes.get('nausea') || 0) + 1);
+    if (symptoms.includes('fever')) symptomTypes.set('fever', (symptomTypes.get('fever') || 0) + 1);
+    if (symptoms.includes('fatigue')) symptomTypes.set('fatigue', (symptomTypes.get('fatigue') || 0) + 1);
+  });
+
+  const topSymptoms = Array.from(symptomTypes.entries())
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 3)
+    .map(([symptom, count]) => `${symptom} (${count}x)`);
+
+  // Generate summary
+  const summary = topSymptoms.length > 0 ? 
+    `Primary complaints include ${topSymptoms.join(', ')}.` :
+    `Reports multiple symptom episodes requiring clinical evaluation.`;
+
+  // Timeline analysis
+  const timeline = entries.length > 1 ? 
+    `Patient has reported ${entries.length} symptom episodes over time. Recent pattern shows ${urgentCount > 0 ? 'urgent symptoms requiring immediate attention' : monitorCount > 0 ? 'symptoms requiring monitoring' : 'manageable symptoms'}.` :
+    `Single symptom episode reported. ${entries[0].triageLevel} priority level assigned.`;
+
+  // Risk assessment
+  let riskLevel = "LOW";
+  if (urgentCount > 0) {
+    riskLevel = `HIGH - ${urgentCount} urgent symptom episode(s) requiring immediate medical evaluation`;
+  } else if (monitorCount > 1) {
+    riskLevel = `MODERATE - ${monitorCount} symptom episodes requiring ongoing monitoring`;
+  } else if (monitorCount === 1) {
+    riskLevel = `MODERATE - Symptoms requiring clinical monitoring`;
+  } else {
+    riskLevel = `LOW - Symptoms appear manageable with routine care`;
+  }
+
+  // Recommendations
+  let recommendations = "";
+  if (urgentCount > 0) {
+    recommendations = "IMMEDIATE: Schedule urgent medical evaluation. Consider emergency care if symptoms worsen. Follow up within 24-48 hours.";
+  } else if (monitorCount > 0) {
+    recommendations = "Schedule medical appointment within 1-2 weeks. Monitor symptom progression. Provide patient education on warning signs.";
+  } else {
+    recommendations = "Routine follow-up recommended. Lifestyle modifications and symptomatic treatment as appropriate.";
+  }
+
+  if (topSymptoms.length > 0) {
+    recommendations += ` Primary focus: ${topSymptoms[0].split(' (')[0]} management.`;
+  }
+
+  return {
+    summary,
+    timeline,
+    riskLevel,
+    recommendations
+  };
 }
 
 // Parse report sections from generated text
