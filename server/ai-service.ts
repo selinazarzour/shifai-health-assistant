@@ -1,15 +1,15 @@
 import { HfInference } from "@huggingface/inference";
 
-// Initialize Hugging Face Inference
-const hf = new HfInference(process.env.HUGGINGFACE_API_TOKEN);
+// Initialize Hugging Face Inference with free tier
+const hf = new HfInference();
 
-// Medical AI Models Configuration
+// Medical AI Models Configuration - using free models
 const MODELS = {
-  // Chat interface - Mistral 7B Instruct for multilingual medical conversations
-  CHAT: "mistralai/Mistral-7B-Instruct-v0.1",
-  // Clinical summarization - BioMedLM for medical report generation
-  CLINICAL: "stanford-crfm/BioMedLM",
-  // Fallback general model
+  // Chat interface - Meta Llama for open conversations
+  CHAT: "meta-llama/Llama-2-7b-chat-hf",
+  // Clinical reports - Mistral for medical analysis
+  CLINICAL: "mistralai/Mistral-7B-Instruct-v0.1",
+  // Fallback model
   FALLBACK: "microsoft/DialoGPT-medium",
 };
 
@@ -53,27 +53,28 @@ function buildChatPrompt(
     ar: "⚠️ هذه نصيحة مولدة بالذكاء الاصطناعي وليست بديلاً عن التشخيص الطبي.",
   };
 
-  const systemPrompt = `You are a compassionate healthcare assistant for patients in Lebanon and Tunisia. 
+  const systemPrompt = `You are ShifAI, an expert medical AI assistant serving patients in Lebanon and Tunisia. Provide comprehensive healthcare guidance including:
 
-IMPORTANT GUIDELINES:
-- Always include this disclaimer: "${disclaimerText[context.language as keyof typeof disclaimerText] || disclaimerText.en}"
-- Never diagnose or replace medical consultation
-- Be warm, conversational, and supportive
-- Reference past symptoms when relevant for personalized advice
-- Support Arabic, French, and English languages
+MEDICAL EXPERTISE:
+- Specific medication recommendations with dosages
+- Prevention strategies and lifestyle modifications
+- Home remedies and self-care instructions
+- Treatment options and symptom management
+- Clear guidance on when to seek immediate vs routine care
 
-Patient Context:
-- Name: ${context.name}
-- Language: ${context.language}
-${context.recentSymptoms.length > 0 ? `- Recent symptoms: ${context.recentSymptoms.map((s) => `${s.symptoms} (${s.triageLevel} level, ${s.timestamp.toLocaleDateString()})`).join("; ")}` : "- No recent symptom history"}
+COMMUNICATION STYLE:
+- Be direct, helpful, and conversational like ChatGPT
+- Provide practical medical advice patients need
+- Respond in ${context.language === 'ar' ? 'Arabic' : context.language === 'fr' ? 'French' : 'English'}
+- Use patient's name: ${context.name}
 
-Previous conversation:
-${chatHistory
-  .slice(-4)
-  .map((msg) => `${msg.role}: ${msg.content}`)
-  .join("\n")}
+PATIENT CONTEXT:
+${context.recentSymptoms.length > 0 ? `Recent health history: ${context.recentSymptoms.map((s) => `${s.symptoms} (${s.triageLevel} priority, ${s.timestamp.toLocaleDateString()})`).join('; ')}` : 'No recent symptom history available'}
 
-Respond in ${context.language} in a caring, professional tone.`;
+RECENT CONVERSATION:
+${chatHistory.slice(-3).map((msg) => `${msg.role === 'user' ? 'Patient' : 'ShifAI'}: ${msg.content}`).join('\n')}
+
+Provide helpful medical guidance with specific actionable advice.`;
 
   return `${systemPrompt}\n\nUser: ${message}\nAssistant:`;
 }
@@ -135,22 +136,12 @@ export async function generateChatResponse(
 
     let generatedText = response.generated_text?.trim() || "";
 
-    // Ensure disclaimer is included
-    const disclaimerText = {
-      en: "⚠️ This is AI-generated advice and is not a substitute for medical diagnosis.",
-      fr: "⚠️ Ceci est un conseil généré par IA et ne remplace pas un diagnostic médical.",
-      ar: "⚠️ هذه نصيحة مولدة بالذكاء الاصطناعي وليست بديلاً عن التشخيص الطبي.",
-    };
-
-    const disclaimer =
-      disclaimerText[context.language as keyof typeof disclaimerText] ||
-      disclaimerText.en;
-
-    if (!generatedText.includes("⚠️")) {
-      generatedText = `${generatedText}\n\n${disclaimer}`;
+    // Clean up the response
+    if (generatedText.startsWith("ShifAI:") || generatedText.startsWith("Assistant:")) {
+      generatedText = generatedText.replace(/^(ShifAI:|Assistant:)\s*/i, '');
     }
 
-    return generatedText;
+    return generatedText || "I'm here to help with your health questions. Could you tell me more about what you're experiencing?";
   } catch (error) {
     console.error("Error generating chat response:", error);
 
