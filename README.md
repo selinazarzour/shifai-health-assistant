@@ -49,6 +49,8 @@ ShifAI is a multilingual AI-powered healthcare assistant designed to make health
 - npm
 
 ### Setup
+1. **Clone the repo:**
+> **Note:** The backend/API is connected to Replit. Make sure your Replit backend is running and accessible for the app to function correctly. If you deploy the backend elsewhere, update the API base URL in your frontend environment variables accordingly.
 
 1. **Clone the repo:**
    ```sh
