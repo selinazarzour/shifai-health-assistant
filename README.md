@@ -1,6 +1,6 @@
 # ShifAI: AI-Powered Healthcare Assistant
 
-![Main Page](screenshots/main.png)
+![Main Page](screenshots/symptom-checker.png)
 
 ## Overview
 
@@ -17,9 +17,9 @@ ShifAI is a multilingual AI-powered healthcare assistant designed to make health
 
 ## Screenshots
 
-| Patient Main Page | Doctor Dashboard|
+| Ask ShifAI Interface | Doctor Dashboard|
 |-----------|----------------
-| ![Main](screenshots/symptom-checker.png) | ![Doctor Dashboard](screenshots/doctor-dashboard.png) |  
+| ![Ask ShifAI Chat Interface](screenshots/Ask-ShifAI-chat-interface.png) | ![Doctor Dashboard](screenshots/doctor-dashboard.png) |  
 
 | Clinical Report Generator | Symptoms History 
 |-----------|-----------|
